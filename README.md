@@ -112,6 +112,7 @@ venv\Scripts\activate
 ### 3. Bağımlılıkları Yükleyin
 ```bash
 pip install --upgrade pip
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
 pip install -r requirements.txt
 ```
 

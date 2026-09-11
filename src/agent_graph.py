@@ -18,12 +18,13 @@ class EnterpriseRAGAgent:
         print("Yerel Dil Modeli (SLM) belleğe yükleniyor...")
 
         self.tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_NAME)
+        dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+
         self.model = AutoModelForCausalLM.from_pretrained(
             LLM_MODEL_NAME,
-            torch_dtype=torch.bfloat16,
-            device_map="auto"
+            dtype=dtype,
+            device_map="auto" if torch.cuda.is_available() else None
         )
-
         self.generator = pipeline(
             "text-generation",
             model=self.model,
