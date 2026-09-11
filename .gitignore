@@ -1,0 +1,40 @@
+# Sanal Ortamlar (Virtual Environments)
+venv/
+env/
+ENV/
+.venv/
+
+# Python Derleme ve Önbellek Dosyaları
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Hassas Kurumsal Veriler ve Vektör Tabanı
+vector_db/
+data/*
+!data/.gitkeep
+
+# Hugging Face ve PyTorch İndirilen Model Ağırlıkları
+models/
+*.bin
+*.pt
+*.pth
+*.safetensors
+*.onnx
+
+# Ortam Değişkenleri ve Gizli Anahtarlar
+.env
+.env.local
+
+# IDE ve Editör Ayarları
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# İşletim Sistemi Kalıntıları
+.DS_Store
+Thumbs.db
