@@ -1,8 +1,10 @@
 import os
 import shutil
 import time
+import json
 import torch
 from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from src.document_loader import DocumentLoader
@@ -142,6 +144,21 @@ def query_rag(request: QueryRequest):
             "answer": result["answer"],
             "sources": result["sources"]
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/query-stream", summary="Yapay Zekaya Soru Sor (Canlı Akış / Streaming)")
+def query_rag_stream(request: QueryRequest):
+    """RAG Ajanı üzerinden kaynakları ve üretilen token'ları anlık akış (ndjson) olarak iletir."""
+    try:
+        print(f"Canlı akış kullanıcı sorusu: {request.question}")
+
+        def event_generator():
+            for event in agent.stream_events(request.question):
+                yield json.dumps(event, ensure_ascii=False) + "\n"
+
+        return StreamingResponse(event_generator(), media_type="application/x-ndjson")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

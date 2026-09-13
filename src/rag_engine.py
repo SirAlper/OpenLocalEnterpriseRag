@@ -63,8 +63,10 @@ class RAGEngine:
             "document_chunks": doc_counts
         }
 
-    def search(self, query: str, n_results: int = 3) -> dict:
-        """Soruya en yakın şirket belgelerini ve kaynak metaverilerini bulur."""
+    def search(self, query: str, n_results: int = 3, max_distance: float = 1.35) -> dict:
+        """Soruya en yakın şirket belgelerini ve kaynak metaverilerini bulur.
+        max_distance eşiğinden yüksek (alakasız) parçaları eler.
+        """
         if self.collection.count() == 0:
             return {"context": "", "sources": []}
 
@@ -81,16 +83,24 @@ class RAGEngine:
         metadatas = results.get("metadatas", [[]])[0]
         distances = results.get("distances", [[]])[0]
 
+        filtered_docs = []
         sources = []
         for doc_text, meta, dist in zip(retrieved_docs, metadatas, distances):
+            dist_val = round(float(dist), 4) if dist is not None else None
+            
+            # Belirlenen eşikten daha uzak (alakasız) belgeleri bağlama dahil etme
+            if dist_val is not None and max_distance is not None and dist_val > max_distance:
+                continue
+
+            filtered_docs.append(doc_text)
             sources.append({
                 "source": meta.get("source", "Bilinmeyen Belge") if meta else "Bilinmeyen Belge",
                 "chunk_index": meta.get("chunk_index", 0) if meta else 0,
                 "content": doc_text,
-                "distance": round(float(dist), 4) if dist is not None else None
+                "distance": dist_val
             })
 
         return {
-            "context": "\n\n".join(retrieved_docs),
+            "context": "\n\n".join(filtered_docs),
             "sources": sources
         }

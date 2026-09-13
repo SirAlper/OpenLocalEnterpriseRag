@@ -203,25 +203,37 @@ curl -X POST "http://localhost:8000/api/v1/query" \
      }'
 ```
 
+### 6. Canlı Akış ile Soru Sorma (`POST /api/v1/query-stream`)
+Token bazlı gerçek zamanlı canlı akış (NDJSON streaming) sağlar. İlk satırda referans belgeleri (`sources`), sonraki satırlarda üretilen token'ları (`token`) canlı olarak döner.
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/query-stream" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "question": "TechCorp çalışma saatleri nedir?"
+     }'
+```
+
 ---
 
 ## 🗺️ Gelecek Yol Haritası (Roadmap)
 
 ### 🧠 Gelişmiş RAG Teknikleri (Advanced Retrieval)
 - [x] **Kaynak Gösterimi (Citation & Source Attribution):** Üretilen yanıtın hangi belgeden, sayfadan ve metin parçasından alındığını gösteren referans mekanizması.
+- [x] **Vektör Mesafe Eşiği (Distance Thresholding):** Alakasız belgelerin bağlama eklenmesini ve halüsinasyonu engelleyen semantik skor filtresi.
 - [ ] **Reranker (Yeniden Sıralayıcı):** ChromaDB'den dönen sonuçları `bge-reranker` gibi hafif bir modelle yeniden puanlayarak en alakalı bağlamı seçme.
 - [ ] **Hibrit Arama (Hybrid Search):** Anlamsal vektör araması ile anahtar kelime aramasını (BM25) RRF (Reciprocal Rank Fusion) ile birleştirme.
 - [ ] **Zengin Format & Tablo Desteği:** Excel (`.xlsx`), CSV ve tablolardan oluşan kurumsal veriler için yapısal veri ayrıştırma (parsing/chunking).
 
 ### 🤖 LangGraph & Ajan Mimarisi (Agentic RAG)
+- [x] **Akıllı Selamlama & Halüsinasyon Kalkanı:** Selamlaşma ile kurumsal sorguları ayırt eden, belgede bulunmayan kavramlarda uydurma tanımları ve sonsuz tekrarı (*repetition collapse*) engelleyen koruma mantığı.
 - [ ] **Sohbet Geçmişi & Bellek (Multi-Turn Chat History):** LangGraph Memory / Checkpointer entegrasyonu ile oturum bazlı bağlam takibi.
-- [ ] **Akıllı Niyet Yönlendirici (Intent Router):** Genel sohbet (chitchat) ile belge sorgusunu ayırt edip gereksiz vektör aramalarını engelleyen yönlendirme düğümü.
 - [ ] **Halüsinasyon Denetleyici (Hallucination Grader / Self-Correction):** Üretilen cevabın verilen bağlama sadakatini denetleyen ve gerekirse aramayı revize eden kontrol döngüsü.
 
 ### ⚡ Performans ve Hız Optimizasyonu
-- [x] **PyTorch 4-bit (NF4) Kuantizasyonu (`bitsandbytes`):** VRAM tüketimini 5.8 GB'tan 1.2 GB'a düşüren ve PyTorch C++ SDPA çekirdekleriyle çalışan optimize çıkarım.
+- [x] **Akışkan Yanıt (Streaming via TextIteratorStreamer & NDJSON):** Yanıtların kelime kelime ekrana dökülmesini sağlayan yüksek performanslı akış mimarisi ve Streamlit `st.write_stream` entegrasyonu.
+- [x] **Optimize Donanım Hassasiyeti (bfloat16):** RTX 3060 gibi GPU'larda 2.8 GB VRAM ile tam hassasiyetli ve bozulmasız Türkçe çıkarım.
 - [x] **Sabit Yerel Model Dizini (`./models`):** Modelleri doğrudan proje içinde tekil saklayarak `~/.cache` ve `Temp` şişmesini engelleyen mimari.
-- [ ] **Akışkan Yanıt (Streaming SSE / WebSocket):** Yanıtların kelime kelime ekrana dökülmesini sağlayan asenkron akış mimarisi.
 - [x] **Artımlı (Incremental) İndeksleme:** Yalnızca yeni yüklenen belgeleri işleyen ve arka planda çalışan optimize yükleme hattı.
 
 ### 🏢 Kurumsal Güvenlik & İzlenebilirlik (Enterprise Readiness)

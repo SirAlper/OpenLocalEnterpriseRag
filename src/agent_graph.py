@@ -1,7 +1,8 @@
 import torch
 from typing import TypedDict
 from langgraph.graph import StateGraph, END
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig, TextIteratorStreamer
+from threading import Thread
 from src.config import LLM_MODEL_NAME, USE_4BIT_QUANTIZATION
 from src.rag_engine import RAGEngine
 
@@ -57,6 +58,28 @@ class EnterpriseRAGAgent:
 
         self.app = self._build_graph()
 
+    @staticmethod
+    def _is_greeting(query: str) -> bool:
+        """Kullanıcı girdisinin selamlama olup olmadığını kontrol eder."""
+        greetings = ["merhaba", "selam", "günaydın", "iyi günler", "iyi akşamlar", "hey", "nasılsın", "kolay gelsin", "merhabalar"]
+        cleaned = query.strip().lower()
+        return any(cleaned.startswith(g) or cleaned == g for g in greetings)
+
+    def _build_messages(self, context: str, question: str) -> list[dict]:
+        """Kullanıcı sorusu ve bağlam için optimize edilmiş chat şablonunu oluşturur."""
+        system_instruction = (
+            "Sen kurumsal bir yapay zeka asistanısın. "
+            "Sana sunulan Bağlamdaki şirket belgelerine birebir sadık kalarak, soruyu Türkçe, net ve profesyonel bir şekilde yanıtla. "
+            "Asla belgede yer almayan bilgileri uydurma."
+        )
+
+        user_content = f"Bağlam:\n{context}\n\nSoru: {question}"
+
+        return [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": user_content}
+        ]
+
     def _retrieve_node(self, state: AgentState):
         print("retrieve node harekete geçti...")
         search_result = self.rag_engine.search(state["question"])
@@ -66,20 +89,16 @@ class EnterpriseRAGAgent:
         }
 
     def _generate_node(self, state: AgentState):
-        messages = [
-            {
-                "role": "system",
-                "content": (
-                    "Sen kurumsal bir yapay zeka asistanısın. "
-                    "Sadece sana sunulan şirket belgelerine (Bağlam) dayanarak net, profesyonel ve doğru bir yanıt ver. "
-                    "Eğer istenen bilgi belgelerde bulunmuyorsa kesinlikle uydurma ve 'Bu bilgi şirket belgelerinde bulunmamaktadır.' şeklinde belirt."
-                )
-            },
-            {
-                "role": "user",
-                "content": f"Bağlam:\n{state['context']}\n\nSoru: {state['question']}"
-            }
-        ]
+        context = state.get("context", "").strip()
+        question = state["question"]
+
+        # Bağlam boşsa doğrudan güvenli yanıt dön (LLM halüsinasyonunu engelle)
+        if not context:
+            if self._is_greeting(question):
+                return {"answer": "Merhaba! Ben kurumsal yapay zeka asistanınızım. Şirket içi belgelerinizle ilgili sorularınızı yanıtlayabilirim."}
+            return {"answer": "Bu bilgi şirket belgelerinde bulunmamaktadır."}
+
+        messages = self._build_messages(context, question)
 
         prompt = self.tokenizer.apply_chat_template(
             messages,
@@ -87,14 +106,21 @@ class EnterpriseRAGAgent:
             add_generation_prompt=True
         )
 
+        model_inputs = self.tokenizer([prompt], return_tensors="pt").to(self.model.device)
+
         with torch.inference_mode():
-            outputs = self.generator(
-                prompt,
-                max_new_tokens=512,
+            outputs = self.model.generate(
+                **model_inputs,
+                max_new_tokens=256,
                 do_sample=False,
-                return_full_text=False
+                repetition_penalty=1.0
             )
-        answer = outputs[0]["generated_text"].strip()
+
+        # Sadece yeni üretilen token'ları çöz (prompt kısmını at)
+        input_len = model_inputs["input_ids"].shape[1]
+        generated_tokens = outputs[0][input_len:]
+        answer = self.tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
+
         return {"answer": answer}
 
     def _build_graph(self):
@@ -115,3 +141,69 @@ class EnterpriseRAGAgent:
             "answer": result.get("answer", ""),
             "sources": result.get("sources", [])
         }
+
+    def stream_events(self, question: str):
+        """Kullanıcı sorusuna bağlam bularak kaynakları ve token akışını event olarak üretir."""
+        # 1. RAG ile ilgili belgeleri ve bağlamı getir
+        search_result = self.rag_engine.search(question)
+        context = search_result.get("context", "").strip()
+        sources = search_result.get("sources", [])
+
+        # Bulunan kaynakları bildir
+        yield {"type": "sources", "sources": sources}
+
+        # 2. Bağlam boşsa doğrudan güvenli yanıt akıt (LLM halüsinasyonunu engelle)
+        if not context:
+            if self._is_greeting(question):
+                fallback_msg = "Merhaba! Ben kurumsal yapay zeka asistanınızım. Şirket içi belgelerinizle ilgili sorularınızı yanıtlayabilirim."
+            else:
+                fallback_msg = "Bu bilgi şirket belgelerinde bulunmamaktadır."
+
+            for word in fallback_msg.split(" "):
+                yield {"type": "token", "token": word + " "}
+            yield {"type": "done"}
+            return
+
+        # 3. Chat şablonunu oluştur
+        messages = self._build_messages(context, question)
+
+        prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True
+        )
+
+        # 4. Tokenize et ve cihaza aktar
+        model_inputs = self.tokenizer([prompt], return_tensors="pt").to(self.model.device)
+
+        # 5. Streamer oluştur
+        streamer = TextIteratorStreamer(
+            self.tokenizer,
+            skip_prompt=True,
+            skip_special_tokens=True
+        )
+
+        generation_kwargs = dict(
+            model_inputs,
+            streamer=streamer,
+            max_new_tokens=256,
+            do_sample=False,
+            repetition_penalty=1.0
+        )
+
+        thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
+        thread.start()
+
+        for new_text in streamer:
+            if new_text:
+                yield {"type": "token", "token": new_text}
+
+        yield {"type": "done"}
+
+    def stream_query(self, question: str):
+        """Kullanıcı sorusuna sadece metin token akışı üretir."""
+        for event in self.stream_events(question):
+            if event["type"] == "token":
+                yield event["token"]
+
+        

@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import json
 
 API_BASE_URL = "http://127.0.0.1:8000"
 
@@ -92,6 +93,28 @@ def query_rag_api(question):
         return {"status": "error", "answer": f"Hata oluştu: {res.text}", "sources": []}
     except Exception as e:
         return {"status": "error", "answer": f"API Bağlantı Hatası: {e}", "sources": []}
+
+
+def stream_rag_api(question):
+    """FastAPI canlı akış endpoint'inden token ve kaynak verilerini çeker."""
+    try:
+        with requests.post(
+            f"{API_BASE_URL}/api/v1/query-stream",
+            json={"question": question},
+            stream=True,
+            timeout=180
+        ) as res:
+            if res.status_code == 200:
+                for line in res.iter_lines(decode_unicode=True):
+                    if line:
+                        try:
+                            yield json.loads(line)
+                        except Exception:
+                            continue
+            else:
+                yield {"type": "token", "token": f"Hata oluştu: {res.text}"}
+    except Exception as e:
+        yield {"type": "token", "token": f"API Bağlantı Hatası: {e}"}
 
 
 # --- OTURUM DURUMU (SESSION STATE) ---
@@ -203,25 +226,35 @@ if prompt := st.chat_input("Şirket belgeleriniz hakkında bir soru sorun (ör. 
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Modelden yanıt al
+    # Modelden yanıt al (Canlı Streaming)
     with st.chat_message("assistant"):
-        with st.spinner("Belgeler taranıyor ve yerel model düşünüyor..."):
-            response = query_rag_api(prompt)
-            answer = response.get("answer", "Yanıt üretilemedi.")
-            sources = response.get("sources", [])
+        sources = []
+        full_answer = []
 
-            st.markdown(answer)
-            if sources:
-                with st.expander(f"📚 Referans Alınan Kaynaklar ({len(sources)} Parça)"):
-                    for idx, src in enumerate(sources, 1):
-                        distance_info = f" (Mesafe: {src['distance']})" if src.get("distance") is not None else ""
-                        st.markdown(f"**{idx}. 📄 `{src['source']}` — Parça #{src['chunk_index']}{distance_info}**")
-                        st.markdown(f"> *\"{src['content'].strip()}\"*")
-                        st.write("")
+        def response_generator():
+            for event in stream_rag_api(prompt):
+                if event.get("type") == "sources":
+                    sources.extend(event.get("sources", []))
+                elif event.get("type") == "token":
+                    token = event.get("token", "")
+                    full_answer.append(token)
+                    yield token
 
-            # Asistan mesajını geçmişe kaydet
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": answer,
-                "sources": sources
-            })
+        # Streamlit st.write_stream ile canlı akışı ekrana bas
+        st.write_stream(response_generator())
+
+        # Kaynakları göster
+        if sources:
+            with st.expander(f"📚 Referans Alınan Kaynaklar ({len(sources)} Parça)"):
+                for idx, src in enumerate(sources, 1):
+                    distance_info = f" (Mesafe: {src['distance']})" if src.get("distance") is not None else ""
+                    st.markdown(f"**{idx}. 📄 `{src['source']}` — Parça #{src['chunk_index']}{distance_info}**")
+                    st.markdown(f"> *\"{src['content'].strip()}\"*")
+                    st.write("")
+
+        # Asistan mesajını geçmişe kaydet
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": "".join(full_answer),
+            "sources": sources
+        })
