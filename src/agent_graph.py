@@ -1,8 +1,8 @@
 import torch
 from typing import TypedDict
 from langgraph.graph import StateGraph, END
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-from src.config import LLM_MODEL_NAME
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig
+from src.config import LLM_MODEL_NAME, USE_4BIT_QUANTIZATION
 from src.rag_engine import RAGEngine
 
 
@@ -16,16 +16,39 @@ class AgentState(TypedDict):
 class EnterpriseRAGAgent:
     def __init__(self, rag_engine: RAGEngine):
         self.rag_engine = rag_engine
-        print("Yerel Dil Modeli (SLM) belleğe yükleniyor...")
+        is_cuda = torch.cuda.is_available()
+        device_str = "CUDA GPU" if is_cuda else "CPU"
+        print(f"Yerel Dil Modeli ({LLM_MODEL_NAME}) {device_str} üzerinde yükleniyor...")
 
         self.tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_NAME)
-        dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+
+        # PyTorch 4-bit Kuantizasyon & Bellek Optimizasyonu
+        quantization_config = None
+        torch_dtype = torch.bfloat16 if is_cuda else torch.float32
+
+        if is_cuda and USE_4BIT_QUANTIZATION:
+            print("[PyTorch] 4-bit (NF4) Kuantizasyon aktif ediliyor...")
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_compute_dtype=torch.bfloat16
+            )
+
+        model_kwargs = {
+            "torch_dtype": torch_dtype,
+            "device_map": "auto" if is_cuda else None,
+        }
+        if quantization_config:
+            model_kwargs["quantization_config"] = quantization_config
+        elif is_cuda:
+            model_kwargs["attn_implementation"] = "sdpa"
 
         self.model = AutoModelForCausalLM.from_pretrained(
             LLM_MODEL_NAME,
-            torch_dtype=dtype,
-            device_map="auto" if torch.cuda.is_available() else None
+            **model_kwargs
         )
+
         self.generator = pipeline(
             "text-generation",
             model=self.model,
@@ -64,12 +87,13 @@ class EnterpriseRAGAgent:
             add_generation_prompt=True
         )
 
-        outputs = self.generator(
-            prompt,
-            max_new_tokens=512,
-            do_sample=False,
-            return_full_text=False
-        )
+        with torch.inference_mode():
+            outputs = self.generator(
+                prompt,
+                max_new_tokens=512,
+                do_sample=False,
+                return_full_text=False
+            )
         answer = outputs[0]["generated_text"].strip()
         return {"answer": answer}
 

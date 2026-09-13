@@ -61,13 +61,13 @@ Pek çok kurumsal firma, veri sızıntısı riskleri, regülasyonlar (KVKK, GDPR
 
 | Bileşen | Minimum | Önerilen |
 | :--- | :--- | :--- |
-| **İşletim Sistemi** | Ubuntu 22.04 LTS / Windows 11 | Ubuntu 22.04 LTS |
-| **Python** | 3.10+ | 3.11 |
-| **Sistem Belleği (RAM)** | 16 GB DDR4/DDR5 | 32 GB RAM |
-| **GPU / VRAM** | NVIDIA GPU (Min 6 GB VRAM) | NVIDIA RTX 3080/4080 / A4000 (12+ GB VRAM) |
+| **İşletim Sistemi** | Ubuntu 22.04 LTS / Windows 11 | Ubuntu 22.04 LTS / Windows 11 |
+| **Python** | 3.10+ | 3.11 / 3.12 |
+| **Sistem Belleği (RAM)** | 8 GB DDR4 | 16 GB+ RAM |
+| **GPU / VRAM** | NVIDIA GPU (**Min 2-4 GB VRAM - 4-bit Kuantize**) | NVIDIA RTX 3060 / 4060+ (6+ GB VRAM) |
 | **CUDA Desteği** | CUDA 11.8+ | CUDA 12.1+ |
 
-*(Not: CUDA destekli bir GPU bulunmadığında modeller CPU üzerinde çalıştırılabilir; ancak çıkarım süresi uzar.)*
+*(Not: PyTorch 4-bit NF4 kuantizasyonu sayesinde model sadece ~1.2 GB VRAM tüketir. GPU bulunmadığında CPU üzerinde de çalıştırılabilir.)*
 
 ---
 
@@ -76,18 +76,20 @@ Pek çok kurumsal firma, veri sızıntısı riskleri, regülasyonlar (KVKK, GDPR
 ```text
 local-enterprise-rag/
 ├── data/                  # Ham şirket belgelerinin tutulduğu klasör (PDF, DOCX, TXT)
+├── models/                # Yerel model ağırlıklarının tutulduğu dizin (SLM & Embedding)
 ├── vector_db/             # ChromaDB kalıcı vektör dizini
 ├── ui/
 │   └── app.py             # Streamlit tabanlı modern kullanıcı ve yönetim arayüzü
 ├── src/
 │   ├── __init__.py
-│   ├── config.py          # Sistem, dosya yolları ve model yapılandırması
+│   ├── config.py          # Sistem, dosya yolları ve 4-bit model yapılandırması
 │   ├── document_loader.py # PDF/DOCX/TXT okuyucu ve artımlı metin parçalayıcı
 │   ├── rag_engine.py      # Embedding, silme, istatistik ve kaynaklı arama motoru
-│   ├── agent_graph.py     # LangGraph düğümleri ve yürütme mantığı
+│   ├── agent_graph.py     # LangGraph düğümleri, BitsAndBytes 4-bit ve SDPA çıkarımı
 │   └── main.py            # FastAPI sunucusu, yönetim ve REST API uç noktaları
+├── download_model.py      # Modelleri doğrudan models/ içine indiren betik
 ├── requirements.txt       # Proje bağımlılıkları listesi
-├── .gitignore             # Vektör veri tabanını ve önbellekleri hariç tutma kuralları
+├── .gitignore             # Vektör veri tabanını ve modelleri hariç tutma kuralları
 └── README.md              # Proje dokümantasyonu
 ```
 
@@ -129,29 +131,18 @@ python -m venv .venv
   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
   ```
 
-Kurulumun doğru yapıldığını ve GPU'nun algılandığını doğrulamak için:
-```bash
-python -c "import torch; print('CUDA Aktif:', torch.cuda.is_available())"
-```
-
 ### 4. Diğer Bağımlılıkları Yükleyin
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 5. İlk Çalıştırma ve Model İndirmeleri (Önemli Not)
+### 5. Modelleri Yerel Dizine İndirin (Tek Seferlik)
 
-Sistem ilk kez ayağa kaldırılırken yapılandırılan model Hugging Face Hub üzerinden yerel önbelleğinize indirilir. Bu tek seferlik bir işlemdir.
-
-İndirme sırasında Hugging Face hız sınırlamalarına takılmamak ve indirmeyi hızlandırmak için:
+Modelleri doğrudan `./models` klasörüne sabitlemek ve temp/cache birikimini önlemek için:
 
 ```bash
-# 1. Hızlı indirme motorunu yükleyin
-pip install hf-transfer huggingface_hub
-
-# 2. Hızlı indirmeyi aktif edin (Windows PowerShell)
-$env:HF_HUB_ENABLE_HF_TRANSFER=1
+python download_model.py
 ```
 
 ### 6. Servisleri Başlatın
@@ -228,8 +219,9 @@ curl -X POST "http://localhost:8000/api/v1/query" \
 - [ ] **Halüsinasyon Denetleyici (Hallucination Grader / Self-Correction):** Üretilen cevabın verilen bağlama sadakatini denetleyen ve gerekirse aramayı revize eden kontrol döngüsü.
 
 ### ⚡ Performans ve Hız Optimizasyonu
+- [x] **PyTorch 4-bit (NF4) Kuantizasyonu (`bitsandbytes`):** VRAM tüketimini 5.8 GB'tan 1.2 GB'a düşüren ve PyTorch C++ SDPA çekirdekleriyle çalışan optimize çıkarım.
+- [x] **Sabit Yerel Model Dizini (`./models`):** Modelleri doğrudan proje içinde tekil saklayarak `~/.cache` ve `Temp` şişmesini engelleyen mimari.
 - [ ] **Akışkan Yanıt (Streaming SSE / WebSocket):** Yanıtların kelime kelime ekrana dökülmesini sağlayan asenkron akış mimarisi.
-- [ ] **Ollama / GGUF (llama.cpp) & vLLM Entegrasyonu:** 4-bit kuantize edilmiş yerel modeller ile minimum VRAM/RAM tüketimi ve yüksek çıkarım hızı.
 - [x] **Artımlı (Incremental) İndeksleme:** Yalnızca yeni yüklenen belgeleri işleyen ve arka planda çalışan optimize yükleme hattı.
 
 ### 🏢 Kurumsal Güvenlik & İzlenebilirlik (Enterprise Readiness)
