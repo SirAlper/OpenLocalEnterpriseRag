@@ -1,3 +1,4 @@
+import os
 import torch
 from typing import TypedDict, Literal
 from langgraph.graph import StateGraph, END
@@ -22,7 +23,8 @@ class EnterpriseRAGAgent:
         device_str = "CUDA GPU" if is_cuda else "CPU"
         print(f"Yerel Dil Modeli ({LLM_MODEL_NAME}) {device_str} üzerinde yükleniyor...")
 
-        self.tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_NAME)
+        is_local = os.path.exists(LLM_MODEL_NAME)
+        self.tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_NAME, local_files_only=is_local)
 
         # PyTorch 4-bit Kuantizasyon & Bellek Optimizasyonu
         quantization_config = None
@@ -40,6 +42,7 @@ class EnterpriseRAGAgent:
         model_kwargs = {
             "torch_dtype": torch_dtype,
             "device_map": "auto" if is_cuda else None,
+            "local_files_only": is_local,
         }
         if quantization_config:
             model_kwargs["quantization_config"] = quantization_config

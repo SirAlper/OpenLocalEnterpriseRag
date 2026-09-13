@@ -8,8 +8,8 @@ from src.config import EMBEDDING_MODEL_NAME, VECTOR_DB_PATH
 class RAGEngine:
     def __init__(self):
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"Embedding modeli ({device}) üzerinde yükleniyor...")
-        self.embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME, device=device)
+        is_local = os.path.exists(EMBEDDING_MODEL_NAME)
+        self.embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME, device=device, local_files_only=is_local)
 
         print("Yerel Vektör Veritabanı (ChromaDB) başlatılıyor...")
         self.client = chromadb.PersistentClient(path=VECTOR_DB_PATH)
