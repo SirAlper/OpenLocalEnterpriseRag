@@ -25,24 +25,35 @@ Pek çok kurumsal firma, veri sızıntısı riskleri, regülasyonlar (KVKK, GDPR
 ```text
 +-------------------------------------------------------------------------+
 |                              FastAPI Gateway                            |
-|             (POST /api/v1/documents  |  POST /api/v1/query)             |
+|        (POST /api/v1/documents  |  POST /api/v1/query-stream)           |
 +------------------------------------+------------------------------------+
                                      |
                                      v
 +-------------------------------------------------------------------------+
 |                        LangGraph Workflow Engine                        |
 |                                                                         |
-|   +-------------------+      Context       +------------------------+   |
-|   |   Retrieve Node   | -----------------> |    Generation Node     |   |
-|   +---------+---------+                    +-----------+------------+   |
-|             |                                          |                |
-+-------------|------------------------------------------|----------------+
-              |                                          |
-              v                                          v
-+-----------------------------+            +------------------------------+
-|     ChromaDB Vector Store   |            |      Hugging Face / PyTorch  |
-|  (all-MiniLM-L6-v2 Embeds)  |            |   (Phi-3-mini / Llama-3 SLM) |
-+-----------------------------+            +------------------------------+
+|   +-------------------+                +------------------------+       |
+|   |   Retrieve Node   | -------------> |    Generation Node     |       |
+|   +---------+---------+                +-----------+------------+       |
+|             |                                      |                    |
+|             |                                      v                    |
+|             |                          +------------------------+       |
+|             |                          |   Hallucination Grader |       |
+|             |                          +-----------+------------+       |
+|             |                                      |                    |
+|             |                        [is_grounded] / \ [hallucinated]   |
+|             |                                     v   v                 |
+|             |                                   [END] [Fallback Node]   |
+|             |                                               |           |
+|             |                                               v           |
+|             |                                             [END]         |
++-------------|-----------------------------------------------------------+
+              |
+              v
++-----------------------------+
+|     ChromaDB Vector Store   |
+|  (all-MiniLM-L6-v2 Embeds)  |
++-----------------------------+
 ```
 
 ---
@@ -227,8 +238,8 @@ curl -X POST "http://localhost:8000/api/v1/query-stream" \
 
 ### 🤖 LangGraph & Ajan Mimarisi (Agentic RAG)
 - [x] **Akıllı Selamlama & Halüsinasyon Kalkanı:** Selamlaşma ile kurumsal sorguları ayırt eden, belgede bulunmayan kavramlarda uydurma tanımları ve sonsuz tekrarı (*repetition collapse*) engelleyen koruma mantığı.
+- [x] **Halüsinasyon Denetleyici & Özyansıma (Hallucination Grader / Self-RAG):** Üretilen cevabın verilen bağlama sadakatini denetleyen ve gerekirse güvenli fallback düğümüne yönlendiren koşullu kontrol döngüsü.
 - [ ] **Sohbet Geçmişi & Bellek (Multi-Turn Chat History):** LangGraph Memory / Checkpointer entegrasyonu ile oturum bazlı bağlam takibi.
-- [ ] **Halüsinasyon Denetleyici (Hallucination Grader / Self-Correction):** Üretilen cevabın verilen bağlama sadakatini denetleyen ve gerekirse aramayı revize eden kontrol döngüsü.
 
 ### ⚡ Performans ve Hız Optimizasyonu
 - [x] **Akışkan Yanıt (Streaming via TextIteratorStreamer & NDJSON):** Yanıtların kelime kelime ekrana dökülmesini sağlayan yüksek performanslı akış mimarisi ve Streamlit `st.write_stream` entegrasyonu.

@@ -1,5 +1,5 @@
 import torch
-from typing import TypedDict
+from typing import TypedDict, Literal
 from langgraph.graph import StateGraph, END
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig, TextIteratorStreamer
 from threading import Thread
@@ -12,6 +12,7 @@ class AgentState(TypedDict):
     context: str
     sources: list[dict]
     answer: str
+    hallucination_grade: str
 
 
 class EnterpriseRAGAgent:
@@ -80,6 +81,28 @@ class EnterpriseRAGAgent:
             {"role": "user", "content": user_content}
         ]
 
+    def _build_hallucination_message(self, context: str, question: str, answer: str) -> list[dict]:
+        """Kullanıcının sorusuna oluşturulan cevabın sunulan şirket belgelerine sadık kalıp kalmadığını kontrol eder."""
+        system_instruction = (
+            "Sen bir denetçisin. Sana sunulan Bağlamdaki şirket belgelerini ve üretilen Cevabı incele.\n"
+            "Cevaptaki tüm iddialar ve bilgiler Bağlam tarafından doğrulanıyor mu?\n"
+            "Sadece tek bir kelime olarak 'evet' veya 'hayır' cevabı ver."
+        )
+
+        user_content = f"Bağlam:\n{context}\n\nSoru: {question}\n\nCevap:\n{answer}"
+
+        return [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": user_content}
+        ]
+
+    def decide_hallucinate(self, state: AgentState) -> Literal["end", "fallback"]:
+        """Hallucination sonucuna göre grafiğin rotasını belirler."""
+        grade = str(state.get("hallucination_grade", "")).strip().lower()
+        if "evet" in grade or "yes" in grade:
+            return "end"
+        return "fallback"
+
     def _retrieve_node(self, state: AgentState):
         print("retrieve node harekete geçti...")
         search_result = self.rag_engine.search(state["question"])
@@ -123,20 +146,72 @@ class EnterpriseRAGAgent:
 
         return {"answer": answer}
 
+    def _grade_hallucination_node(self, state: AgentState):
+        context = state.get("context", "").strip()
+        question = state["question"]
+        answer = state.get("answer", "")
+
+        # Eğer bağlam boşsa (zaten selamlama veya güvenli red mesajı üretilmiştir), denetlemeye gerek yok
+        if not context:
+            return {"hallucination_grade": "evet"}
+
+        messages = self._build_hallucination_message(context, question, answer)
+
+        prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True
+        )
+
+        model_inputs = self.tokenizer([prompt], return_tensors="pt").to(self.model.device)
+
+        with torch.inference_mode():
+            outputs = self.model.generate(
+                **model_inputs,
+                max_new_tokens=5,
+                do_sample=False,
+                repetition_penalty=1.0
+            )
+
+        # Sadece yeni üretilen token'ları çöz (prompt kısmını at)
+        input_len = model_inputs["input_ids"].shape[1]
+        generated_tokens = outputs[0][input_len:]
+        hallucination_grade = self.tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
+        print(f"Hallucination denetim sonucu: {hallucination_grade}")
+
+        return {"hallucination_grade": hallucination_grade}
+
+    def _fallback_node(self, state: AgentState):
+        """Halüsinasyon tespit edildiğinde devreye giren güvenli yanıt düğümü."""
+        print("Halüsinasyon tespit edildi, fallback devreye girdi!")
+        return {"answer": "Bu bilgi şirket belgelerinde tam olarak doğrulanamamaktadır."}
+
     def _build_graph(self):
         workflow = StateGraph(AgentState)
 
         workflow.add_node("retrieve", self._retrieve_node)
         workflow.add_node("generate", self._generate_node)
+        workflow.add_node("grade", self._grade_hallucination_node)
+        workflow.add_node("fallback", self._fallback_node)
 
         workflow.set_entry_point("retrieve")
         workflow.add_edge("retrieve", "generate")
-        workflow.add_edge("generate", END)
+        workflow.add_edge("generate", "grade")
+
+        workflow.add_conditional_edges(
+            "grade",
+            self.decide_hallucinate,
+            {
+                "end": END,
+                "fallback": "fallback"
+            }
+        )
+        workflow.add_edge("fallback", END)
 
         return workflow.compile()
 
     def query(self, question: str) -> dict:
-        result = self.app.invoke({"question": question, "context": "", "sources": [], "answer": ""})
+        result = self.app.invoke({"question": question, "context": "", "sources": [], "answer": "", "hallucination_grade": ""})
         return {
             "answer": result.get("answer", ""),
             "sources": result.get("sources", [])
