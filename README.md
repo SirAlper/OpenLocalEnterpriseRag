@@ -75,14 +75,17 @@ Pek çok kurumsal firma, veri sızıntısı riskleri, regülasyonlar (KVKK, GDPR
 
 ```text
 local-enterprise-rag/
-├── data/                  # Ham şirket belgelerinin tutulduğu klasör
+├── data/                  # Ham şirket belgelerinin tutulduğu klasör (PDF, DOCX, TXT)
 ├── vector_db/             # ChromaDB kalıcı vektör dizini
+├── ui/
+│   └── app.py             # Streamlit tabanlı modern kullanıcı ve yönetim arayüzü
 ├── src/
 │   ├── __init__.py
 │   ├── config.py          # Sistem, dosya yolları ve model yapılandırması
-│   ├── rag_engine.py      # Embedding ve ChromaDB vektör motoru
+│   ├── document_loader.py # PDF/DOCX/TXT okuyucu ve artımlı metin parçalayıcı
+│   ├── rag_engine.py      # Embedding, silme, istatistik ve kaynaklı arama motoru
 │   ├── agent_graph.py     # LangGraph düğümleri ve yürütme mantığı
-│   └── main.py            # FastAPI sunucusu ve REST API uç noktaları
+│   └── main.py            # FastAPI sunucusu, yönetim ve REST API uç noktaları
 ├── requirements.txt       # Proje bağımlılıkları listesi
 ├── .gitignore             # Vektör veri tabanını ve önbellekleri hariç tutma kuralları
 └── README.md              # Proje dokümantasyonu
@@ -94,19 +97,19 @@ local-enterprise-rag/
 
 ### 1. Depoyu Klonlayın
 ```bash
-git clone [https://github.com/kullaniciadi/local-enterprise-rag.git](https://github.com/kullaniciadi/local-enterprise-rag.git)
+git clone https://github.com/kullaniciadi/local-enterprise-rag.git
 cd local-enterprise-rag
 ```
 
 ### 2. Sanal Ortamı Hazırlayın
 ```bash
 # Linux / macOS
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 
 # Windows (PowerShell / CMD)
-python -m venv venv
-venv\Scripts\activate
+python -m venv .venv
+.\.venv\Scripts\activate
 ```
 
 ### 3. Donanımınıza Uygun PyTorch Sürümünü Kurun
@@ -115,15 +118,15 @@ venv\Scripts\activate
 
 * **NVIDIA GPU (CUDA 12.1 - Önerilen):**
   ```bash
-  pip install torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cu121](https://download.pytorch.org/whl/cu121)
+  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
   ```
 * **NVIDIA GPU (CUDA 11.8):**
   ```bash
-  pip install torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cu118](https://download.pytorch.org/whl/cu118)
+  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
   ```
 * **Yalnızca CPU (Test ve Geliştirme İçin):**
   ```bash
-  pip install torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cpu](https://download.pytorch.org/whl/cpu)
+  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
   ```
 
 Kurulumun doğru yapıldığını ve GPU'nun algılandığını doğrulamak için:
@@ -139,64 +142,67 @@ pip install -r requirements.txt
 
 ### 5. İlk Çalıştırma ve Model İndirmeleri (Önemli Not)
 
-Sistem ilk kez ayağa kaldırılırken yapılandırılan Küçük Dil Modeli (SLM, örneğin Phi-3-mini ~7.6 GB) Hugging Face Hub üzerinden yerel önbelleğinize (`~/.cache/huggingface/hub`) indirilir. Bu tek seferlik bir işlemdir; sonraki çalıştırmalarda model diskten saniyeler içinde yüklenir.
+Sistem ilk kez ayağa kaldırılırken yapılandırılan model Hugging Face Hub üzerinden yerel önbelleğinize indirilir. Bu tek seferlik bir işlemdir.
 
-İndirme sırasında Hugging Face hız sınırlamalarına takılmamak ve indirmeyi 4-5 kat hızlandırmak için şu adımlar önerilir:
+İndirme sırasında Hugging Face hız sınırlamalarına takılmamak ve indirmeyi hızlandırmak için:
 
 ```bash
 # 1. Hızlı indirme motorunu yükleyin
 pip install hf-transfer huggingface_hub
 
-# 2. Hızlı indirmeyi aktif edin
-# Linux / macOS:
-export HF_HUB_ENABLE_HF_TRANSFER=1
-# Windows CMD:
-set HF_HUB_ENABLE_HF_TRANSFER=1
-# Windows PowerShell:
+# 2. Hızlı indirmeyi aktif edin (Windows PowerShell)
 $env:HF_HUB_ENABLE_HF_TRANSFER=1
-
-# 3. Ücretsiz Hugging Face Read Token'ınız ile giriş yapın (Opsiyonel ama önerilir)
-hf auth login
 ```
 
-### 6. Servisi Başlatın
+### 6. Servisleri Başlatın
+
+#### A. Backend API'yi Başlatın:
 ```bash
 uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+* Swagger API Arayüzü: `http://localhost:8000/docs`
 
-Swagger API Arayüzü: `http://localhost:8000/docs`
+#### B. Kullanıcı Arayüzünü (Streamlit) Başlatın:
+Ayrı bir terminalde:
+```bash
+streamlit run ui/app.py
+```
+* Web Dashboard: `http://localhost:8501`
 
 ---
 
 ## 🔌 API Kullanım Özeti
 
-### Doküman Ekleme (`POST /api/v1/documents`)
-Şirket içi yönetmelikleri, kılavuzları veya belgeleri vektör veritabanına indekslemek için kullanılır.
+### 1. Sistem & Veritabanı İstatistikleri (`GET /api/v1/stats`)
+Sistem donanımını (CUDA/CPU), kullanılan modelleri ve indekslenmiş toplam parça sayılarını döner.
 
-* **İstek Gövdesi:**
-  * `texts`: İndekslenecek metin parçalarının listesi.
-  * `ids`: Her bir belge parçası için benzersiz kimlik listesi.
+### 2. Belgeleri Listeleme (`GET /api/v1/documents`)
+Sistemde yüklü olan tüm belgeleri, dosya boyutlarını ve her birinin kaç parçaya bölündüğünü listeler.
+
+### 3. Belge Yükleme ve İndeksleme (`POST /api/v1/upload-file`)
+Multipart/form-data ile yüklenen dosyayı kaydeder, parçalar ve ChromaDB'ye ekler.
 
 ```bash
-curl -X POST "http://localhost:8000/api/v1/documents" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "texts": [
-         "Şirket uzaktan çalışma politikası gereği haftada 2 gün ofisten çalışma esastır.",
-         "Yıllık izin talepleri en az 2 hafta öncesinden İK portalı üzerinden iletilmelidir."
-       ],
-       "ids": ["policy_01", "policy_02"]
-     }'
+curl -X POST "http://localhost:8000/api/v1/upload-file" \
+     -F "file=@sirket_politikasi.pdf"
 ```
 
-### Yapay Zekaya Soru Sorma (`POST /api/v1/query`)
-İndekslenen şirket verileri üzerinden yerel dil modeli ile çıkarım yapmak için kullanılır.
+### 4. Belge Silme (`DELETE /api/v1/documents/{filename}`)
+Belirtilen dosyayı hem `data/` dizininden hem de ChromaDB vektör veritabanından kalıcı olarak siler.
+
+```bash
+curl -X DELETE "http://localhost:8000/api/v1/documents/sirket_politikasi.pdf"
+```
+
+### 5. Yapay Zekaya Soru Sorma (`POST /api/v1/query`)
+İndekslenen şirket verileri üzerinden yanıt ve referans alınan kaynak alıntılarını döner.
 
 * **İstek Gövdesi:**
   * `question`: Kullanıcının doğal dilde sorduğu soru.
 * **Yanıt Gövdesi:**
-  * `status`: İstek durumu (`success`).
-  * `answer`: Sadece sağlanan şirket bağlamına dayalı üretilen net cevap.
+  * `status`: `success`
+  * `answer`: Üretilen cevap metni.
+  * `sources`: Referans alınan belge adı, parça indeksi ve alıntı metinleri listesi.
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/query" \
@@ -211,7 +217,7 @@ curl -X POST "http://localhost:8000/api/v1/query" \
 ## 🗺️ Gelecek Yol Haritası (Roadmap)
 
 ### 🧠 Gelişmiş RAG Teknikleri (Advanced Retrieval)
-- [ ] **Kaynak Gösterimi (Citation & Source Attribution):** Üretilen yanıtın hangi belgeden, sayfadan ve metin parçasından alındığını gösteren referans mekanizması.
+- [x] **Kaynak Gösterimi (Citation & Source Attribution):** Üretilen yanıtın hangi belgeden, sayfadan ve metin parçasından alındığını gösteren referans mekanizması.
 - [ ] **Reranker (Yeniden Sıralayıcı):** ChromaDB'den dönen sonuçları `bge-reranker` gibi hafif bir modelle yeniden puanlayarak en alakalı bağlamı seçme.
 - [ ] **Hibrit Arama (Hybrid Search):** Anlamsal vektör araması ile anahtar kelime aramasını (BM25) RRF (Reciprocal Rank Fusion) ile birleştirme.
 - [ ] **Zengin Format & Tablo Desteği:** Excel (`.xlsx`), CSV ve tablolardan oluşan kurumsal veriler için yapısal veri ayrıştırma (parsing/chunking).
@@ -224,7 +230,7 @@ curl -X POST "http://localhost:8000/api/v1/query" \
 ### ⚡ Performans ve Hız Optimizasyonu
 - [ ] **Akışkan Yanıt (Streaming SSE / WebSocket):** Yanıtların kelime kelime ekrana dökülmesini sağlayan asenkron akış mimarisi.
 - [ ] **Ollama / GGUF (llama.cpp) & vLLM Entegrasyonu:** 4-bit kuantize edilmiş yerel modeller ile minimum VRAM/RAM tüketimi ve yüksek çıkarım hızı.
-- [ ] **Artımlı (Incremental) İndeksleme:** Yalnızca yeni yüklenen belgeleri işleyen ve arka planda asenkron çalışan optimize yükleme hattı.
+- [x] **Artımlı (Incremental) İndeksleme:** Yalnızca yeni yüklenen belgeleri işleyen ve arka planda çalışan optimize yükleme hattı.
 
 ### 🏢 Kurumsal Güvenlik & İzlenebilirlik (Enterprise Readiness)
 - [ ] **Kullanıcı Yetkilendirme & RBAC:** Kullanıcı/departman rollerine göre belge ve koleksiyon erişim kontrolü.

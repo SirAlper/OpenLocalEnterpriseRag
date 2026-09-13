@@ -13,3 +13,5 @@ pypdf
 python-docx
 python-multipart
 langchain-text-splitters
+streamlit
+requests

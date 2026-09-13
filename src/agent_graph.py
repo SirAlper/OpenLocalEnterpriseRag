@@ -9,6 +9,7 @@ from src.rag_engine import RAGEngine
 class AgentState(TypedDict):
     question: str
     context: str
+    sources: list[dict]
     answer: str
 
 
@@ -35,8 +36,11 @@ class EnterpriseRAGAgent:
 
     def _retrieve_node(self, state: AgentState):
         print("retrieve node harekete geçti...")
-        context = self.rag_engine.search(state["question"])
-        return {"context": context}
+        search_result = self.rag_engine.search(state["question"])
+        return {
+            "context": search_result["context"],
+            "sources": search_result["sources"]
+        }
 
     def _generate_node(self, state: AgentState):
         messages = [
@@ -81,6 +85,9 @@ class EnterpriseRAGAgent:
 
         return workflow.compile()
 
-    def query(self, question: str) -> str:
-        result = self.app.invoke({"question": question})
-        return result["answer"]
+    def query(self, question: str) -> dict:
+        result = self.app.invoke({"question": question, "context": "", "sources": [], "answer": ""})
+        return {
+            "answer": result.get("answer", ""),
+            "sources": result.get("sources", [])
+        }

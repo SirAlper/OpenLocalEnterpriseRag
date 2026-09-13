@@ -30,6 +30,41 @@ class DocumentLoader:
         with open(file_path, "r", encoding="utf-8") as f:
             return f.read()
 
+    def load_and_chunk_file(self, file_path: str):
+        """Tek bir belgeyi okur ve parçalar."""
+        chunks = []
+        ids = []
+        metadatas = []
+
+        if not os.path.isfile(file_path):
+            return chunks, ids, metadatas
+
+        filename = os.path.basename(file_path)
+        ext = os.path.splitext(filename)[1].lower()
+
+        content = ""
+        if ext == ".pdf":
+            content = self._read_pdf(file_path)
+        elif ext == ".docx":
+            content = self._read_docx(file_path)
+        elif ext == ".txt":
+            content = self._read_txt(file_path)
+        else:
+            print(f"Desteklenmeyen dosya formatı atlandı: {filename}")
+            return chunks, ids, metadatas
+
+        if not content.strip():
+            return chunks, ids, metadatas
+
+        chunk_texts = self.text_splitter.split_text(content)
+        for idx, chunk in enumerate(chunk_texts):
+            chunk_id = f"{filename}_chunk_{idx}"
+            chunks.append(chunk)
+            ids.append(chunk_id)
+            metadatas.append({"source": filename, "chunk_index": idx})
+
+        return chunks, ids, metadatas
+
     def load_and_chunk_all(self):
         """data/ klasöründeki tüm geçerli belgeleri okur ve parçalar."""
         all_chunks = []
@@ -45,29 +80,9 @@ class DocumentLoader:
             if not os.path.isfile(file_path):
                 continue
 
-            content = ""
-            ext = os.path.splitext(filename)[1].lower()
-
-            if ext == ".pdf":
-                content = self._read_pdf(file_path)
-            elif ext == ".docx":
-                content = self._read_docx(file_path)
-            elif ext == ".txt":
-                content = self._read_txt(file_path)
-            else:
-                print(f"Desteklenmeyen dosya formatı atlandı: {filename}")
-                continue
-
-            if not content.strip():
-                continue
-
-            # Metni parçala (chunking)
-            chunks = self.text_splitter.split_text(content)
-
-            for idx, chunk in enumerate(chunks):
-                chunk_id = f"{filename}_chunk_{idx}"
-                all_chunks.append(chunk)
-                all_ids.append(chunk_id)
-                metadatas.append({"source": filename, "chunk_index": idx})
+            chunks, ids, metas = self.load_and_chunk_file(file_path)
+            all_chunks.extend(chunks)
+            all_ids.extend(ids)
+            metadatas.extend(metas)
 
         return all_chunks, all_ids, metadatas
