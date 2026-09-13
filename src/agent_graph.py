@@ -22,35 +22,51 @@ class EnterpriseRAGAgent:
 
         self.model = AutoModelForCausalLM.from_pretrained(
             LLM_MODEL_NAME,
-            dtype=dtype,
+            torch_dtype=dtype,
             device_map="auto" if torch.cuda.is_available() else None
         )
         self.generator = pipeline(
             "text-generation",
             model=self.model,
-            tokenizer=self.tokenizer,
-            max_new_tokens=512
+            tokenizer=self.tokenizer
         )
 
         self.app = self._build_graph()
 
     def _retrieve_node(self, state: AgentState):
+        print("retrieve node harekete geçti...")
         context = self.rag_engine.search(state["question"])
         return {"context": context}
 
     def _generate_node(self, state: AgentState):
-        prompt = f"""[INST] Sen kurumsal bir yapay zeka asistanısın. Sadece verilen şirket belgelerine dayanarak net ve profesyonel bir yanıt ver. Eğer bilgi belgelerde yoksa 'Bilmiyorum' de.
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Sen kurumsal bir yapay zeka asistanısın. "
+                    "Sadece sana sunulan şirket belgelerine (Bağlam) dayanarak net, profesyonel ve doğru bir yanıt ver. "
+                    "Eğer istenen bilgi belgelerde bulunmuyorsa kesinlikle uydurma ve 'Bu bilgi şirket belgelerinde bulunmamaktadır.' şeklinde belirt."
+                )
+            },
+            {
+                "role": "user",
+                "content": f"Bağlam:\n{state['context']}\n\nSoru: {state['question']}"
+            }
+        ]
 
-Bağlam:
-{state['context']}
+        prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True
+        )
 
-Soru: {state['question']}
-[/INST]"""
-
-        outputs = self.generator(prompt)
-        full_text = outputs[0]["generated_text"]
-        # Prompt kısmını ayırıp sadece modeli cevabını alalım
-        answer = full_text.split("[/INST]")[-1].strip()
+        outputs = self.generator(
+            prompt,
+            max_new_tokens=512,
+            do_sample=False,
+            return_full_text=False
+        )
+        answer = outputs[0]["generated_text"].strip()
         return {"answer": answer}
 
     def _build_graph(self):

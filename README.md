@@ -104,19 +104,62 @@ cd local-enterprise-rag
 python3 -m venv venv
 source venv/bin/activate
 
-# Windows
+# Windows (PowerShell / CMD)
 python -m venv venv
 venv\Scripts\activate
 ```
 
-### 3. Bağımlılıkları Yükleyin
+### 3. Donanımınıza Uygun PyTorch Sürümünü Kurun
+
+> **Önemli:** Modellerin GPU hızlandırmasıyla çalışabilmesi için PyTorch'u doğrudan sisteminizdeki CUDA sürümüne uygun resmi indeks ile kurmalısınız.
+
+* **NVIDIA GPU (CUDA 12.1 - Önerilen):**
+  ```bash
+  pip install torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cu121](https://download.pytorch.org/whl/cu121)
+  ```
+* **NVIDIA GPU (CUDA 11.8):**
+  ```bash
+  pip install torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cu118](https://download.pytorch.org/whl/cu118)
+  ```
+* **Yalnızca CPU (Test ve Geliştirme İçin):**
+  ```bash
+  pip install torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cpu](https://download.pytorch.org/whl/cpu)
+  ```
+
+Kurulumun doğru yapıldığını ve GPU'nun algılandığını doğrulamak için:
+```bash
+python -c "import torch; print('CUDA Aktif:', torch.cuda.is_available())"
+```
+
+### 4. Diğer Bağımlılıkları Yükleyin
 ```bash
 pip install --upgrade pip
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
 pip install -r requirements.txt
 ```
 
-### 4. Servisi Başlatın
+### 5. İlk Çalıştırma ve Model İndirmeleri (Önemli Not)
+
+Sistem ilk kez ayağa kaldırılırken yapılandırılan Küçük Dil Modeli (SLM, örneğin Phi-3-mini ~7.6 GB) Hugging Face Hub üzerinden yerel önbelleğinize (`~/.cache/huggingface/hub`) indirilir. Bu tek seferlik bir işlemdir; sonraki çalıştırmalarda model diskten saniyeler içinde yüklenir.
+
+İndirme sırasında Hugging Face hız sınırlamalarına takılmamak ve indirmeyi 4-5 kat hızlandırmak için şu adımlar önerilir:
+
+```bash
+# 1. Hızlı indirme motorunu yükleyin
+pip install hf-transfer huggingface_hub
+
+# 2. Hızlı indirmeyi aktif edin
+# Linux / macOS:
+export HF_HUB_ENABLE_HF_TRANSFER=1
+# Windows CMD:
+set HF_HUB_ENABLE_HF_TRANSFER=1
+# Windows PowerShell:
+$env:HF_HUB_ENABLE_HF_TRANSFER=1
+
+# 3. Ücretsiz Hugging Face Read Token'ınız ile giriş yapın (Opsiyonel ama önerilir)
+hf auth login
+```
+
+### 6. Servisi Başlatın
 ```bash
 uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 ```
@@ -134,6 +177,18 @@ Swagger API Arayüzü: `http://localhost:8000/docs`
   * `texts`: İndekslenecek metin parçalarının listesi.
   * `ids`: Her bir belge parçası için benzersiz kimlik listesi.
 
+```bash
+curl -X POST "http://localhost:8000/api/v1/documents" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "texts": [
+         "Şirket uzaktan çalışma politikası gereği haftada 2 gün ofisten çalışma esastır.",
+         "Yıllık izin talepleri en az 2 hafta öncesinden İK portalı üzerinden iletilmelidir."
+       ],
+       "ids": ["policy_01", "policy_02"]
+     }'
+```
+
 ### Yapay Zekaya Soru Sorma (`POST /api/v1/query`)
 İndekslenen şirket verileri üzerinden yerel dil modeli ile çıkarım yapmak için kullanılır.
 
@@ -143,14 +198,38 @@ Swagger API Arayüzü: `http://localhost:8000/docs`
   * `status`: İstek durumu (`success`).
   * `answer`: Sadece sağlanan şirket bağlamına dayalı üretilen net cevap.
 
+```bash
+curl -X POST "http://localhost:8000/api/v1/query" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "question": "İzin talebimi ne zaman bildirmeliyim?"
+     }'
+```
+
 ---
 
 ## 🗺️ Gelecek Yol Haritası (Roadmap)
 
-- [ ] **Doküman Ayrıştırıcı (Parser):** PDF, DOCX ve XLSX formatları için otomatik metin parçalama (chunking) desteği.
-- [ ] **Doğrulama (Self-Correction) Düğümü:** Model çıktısının bağlama sadık kalıp kalmadığını denetleyen LangGraph kontrol düğümü.
-- [ ] **vLLM Desteği:** Yüksek eşzamanlı istekler için vLLM çıkarım motoru entegrasyonu.
-- [ ] **Konteynerizasyon:** GPU destekli Docker ve Docker-Compose yapılandırması.
+### 🧠 Gelişmiş RAG Teknikleri (Advanced Retrieval)
+- [ ] **Kaynak Gösterimi (Citation & Source Attribution):** Üretilen yanıtın hangi belgeden, sayfadan ve metin parçasından alındığını gösteren referans mekanizması.
+- [ ] **Reranker (Yeniden Sıralayıcı):** ChromaDB'den dönen sonuçları `bge-reranker` gibi hafif bir modelle yeniden puanlayarak en alakalı bağlamı seçme.
+- [ ] **Hibrit Arama (Hybrid Search):** Anlamsal vektör araması ile anahtar kelime aramasını (BM25) RRF (Reciprocal Rank Fusion) ile birleştirme.
+- [ ] **Zengin Format & Tablo Desteği:** Excel (`.xlsx`), CSV ve tablolardan oluşan kurumsal veriler için yapısal veri ayrıştırma (parsing/chunking).
+
+### 🤖 LangGraph & Ajan Mimarisi (Agentic RAG)
+- [ ] **Sohbet Geçmişi & Bellek (Multi-Turn Chat History):** LangGraph Memory / Checkpointer entegrasyonu ile oturum bazlı bağlam takibi.
+- [ ] **Akıllı Niyet Yönlendirici (Intent Router):** Genel sohbet (chitchat) ile belge sorgusunu ayırt edip gereksiz vektör aramalarını engelleyen yönlendirme düğümü.
+- [ ] **Halüsinasyon Denetleyici (Hallucination Grader / Self-Correction):** Üretilen cevabın verilen bağlama sadakatini denetleyen ve gerekirse aramayı revize eden kontrol döngüsü.
+
+### ⚡ Performans ve Hız Optimizasyonu
+- [ ] **Akışkan Yanıt (Streaming SSE / WebSocket):** Yanıtların kelime kelime ekrana dökülmesini sağlayan asenkron akış mimarisi.
+- [ ] **Ollama / GGUF (llama.cpp) & vLLM Entegrasyonu:** 4-bit kuantize edilmiş yerel modeller ile minimum VRAM/RAM tüketimi ve yüksek çıkarım hızı.
+- [ ] **Artımlı (Incremental) İndeksleme:** Yalnızca yeni yüklenen belgeleri işleyen ve arka planda asenkron çalışan optimize yükleme hattı.
+
+### 🏢 Kurumsal Güvenlik & İzlenebilirlik (Enterprise Readiness)
+- [ ] **Kullanıcı Yetkilendirme & RBAC:** Kullanıcı/departman rollerine göre belge ve koleksiyon erişim kontrolü.
+- [ ] **Gözlemlenebilirlik (Observability / Tracing):** Yanıt gecikmesi, token ve erişim metriklerini takip etmek için Langfuse veya Arize Phoenix entegrasyonu.
+- [ ] **Konteynerizasyon:** GPU destekli Docker ve Docker-Compose ile tek komutla kurulum altyapısı.
 
 ---
 

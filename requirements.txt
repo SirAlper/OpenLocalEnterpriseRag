@@ -8,3 +8,8 @@ uvicorn
 pydantic
 python-dotenv
 accelerate
+huggingface_hub
+pypdf
+python-docx
+python-multipart
+langchain-text-splitters
