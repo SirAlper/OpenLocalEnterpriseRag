@@ -215,7 +215,13 @@ curl -X POST "http://localhost:8000/api/v1/query" \
 ```
 
 ### 6. Canlı Akış ile Soru Sorma (`POST /api/v1/query-stream`)
-Token bazlı gerçek zamanlı canlı akış (NDJSON streaming) sağlar. İlk satırda referans belgeleri (`sources`), sonraki satırlarda üretilen token'ları (`token`) canlı olarak döner.
+LangGraph iş akışıyla tam senkronize çalışan gerçek zamanlı canlı akış (NDJSON streaming) sağlar.
+Akış süresince sırasıyla şu olaylar (events) iletilir:
+1. `status`: Aktif LangGraph düğümünün durumu (`🔍 İlgili şirket belgeleri taranıyor...`, `✍️ Yanıt oluşturuluyor...`, `🛡️ Kaynak uyumu ve doğruluk denetleniyor...`)
+2. `sources`: Vektör tabanından çekilen referans belge ve parça bilgileri.
+3. `token`: Dil modelinin ürettiği canlı metin parçacıkları.
+4. `grade` / `warning`: Halüsinasyon ve doğrulama denetiminin sonucu.
+5. `done`: Akışın tamamlandığı bilgisi.
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/query-stream" \
@@ -239,11 +245,13 @@ curl -X POST "http://localhost:8000/api/v1/query-stream" \
 ### 🤖 LangGraph & Ajan Mimarisi (Agentic RAG)
 - [x] **Akıllı Selamlama & Halüsinasyon Kalkanı:** Selamlaşma ile kurumsal sorguları ayırt eden, belgede bulunmayan kavramlarda uydurma tanımları ve sonsuz tekrarı (*repetition collapse*) engelleyen koruma mantığı.
 - [x] **Halüsinasyon Denetleyici & Özyansıma (Hallucination Grader / Self-RAG):** Üretilen cevabın verilen bağlama sadakatini denetleyen ve gerekirse güvenli fallback düğümüne yönlendiren koşullu kontrol döngüsü.
+- [x] **LangGraph & Streaming Tam Senkronizasyonu:** Canlı token akışını graf düğümlerini atlamadan, adım adım durum (`status`), kaynak (`sources`) ve doğrulama (`grade`) olaylarıyla senkronize ileten altyapı.
 - [ ] **Sohbet Geçmişi & Bellek (Multi-Turn Chat History):** LangGraph Memory / Checkpointer entegrasyonu ile oturum bazlı bağlam takibi.
 
 ### ⚡ Performans ve Hız Optimizasyonu
 - [x] **Akışkan Yanıt (Streaming via TextIteratorStreamer & NDJSON):** Yanıtların kelime kelime ekrana dökülmesini sağlayan yüksek performanslı akış mimarisi ve Streamlit `st.write_stream` entegrasyonu.
 - [x] **Optimize Donanım Hassasiyeti (bfloat16):** RTX 3060 gibi GPU'larda 2.8 GB VRAM ile tam hassasiyetli ve bozulmasız Türkçe çıkarım.
+- [x] **Genişletilmiş Token Limiti (512 max_new_tokens):** Uzun kurumsal politika ve maddeli metinlerde yanıtın kesilmesini önleyen optimize üretim penceresi.
 - [x] **Sabit Yerel Model Dizini (`./models`):** Modelleri doğrudan proje içinde tekil saklayarak `~/.cache` ve `Temp` şişmesini engelleyen mimari.
 - [x] **Artımlı (Incremental) İndeksleme:** Yalnızca yeni yüklenen belgeleri işleyen ve arka planda çalışan optimize yükleme hattı.
 

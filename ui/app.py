@@ -210,6 +210,12 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
         
+        # Doğruluk denetimi rozeti
+        if msg.get("verified") is True:
+            st.caption("🛡️ *LangGraph Denetimi: Şirket belgeleriyle doğrulandı.*")
+        elif msg.get("verified") is False:
+            st.caption("⚠️ *LangGraph Denetimi: Belgelerle tam doğrulanamadı.*")
+
         # Referans alınan kaynaklar varsa expander içinde göster
         if msg.get("sources"):
             with st.expander(f"📚 Referans Alınan Kaynaklar ({len(msg['sources'])} Parça)"):
@@ -230,18 +236,32 @@ if prompt := st.chat_input("Şirket belgeleriniz hakkında bir soru sorun (ör. 
     with st.chat_message("assistant"):
         sources = []
         full_answer = []
+        verified = None
+        warning_msg = None
 
         def response_generator():
+            nonlocal verified, warning_msg
             for event in stream_rag_api(prompt):
-                if event.get("type") == "sources":
+                event_type = event.get("type")
+                if event_type == "sources":
                     sources.extend(event.get("sources", []))
-                elif event.get("type") == "token":
+                elif event_type == "token":
                     token = event.get("token", "")
                     full_answer.append(token)
                     yield token
+                elif event_type == "grade":
+                    verified = event.get("passed", True)
+                elif event_type == "warning":
+                    warning_msg = event.get("message", "")
 
         # Streamlit st.write_stream ile canlı akışı ekrana bas
         st.write_stream(response_generator())
+
+        # Uyarı veya Doğrulama rozeti
+        if warning_msg:
+            st.warning(warning_msg)
+        elif verified is True and sources:
+            st.caption("🛡️ *LangGraph Denetimi: Şirket belgeleriyle doğrulandı.*")
 
         # Kaynakları göster
         if sources:
@@ -256,5 +276,6 @@ if prompt := st.chat_input("Şirket belgeleriniz hakkında bir soru sorun (ör. 
         st.session_state.messages.append({
             "role": "assistant",
             "content": "".join(full_answer),
-            "sources": sources
+            "sources": sources,
+            "verified": verified
         })
