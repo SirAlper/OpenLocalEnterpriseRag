@@ -236,11 +236,9 @@ if prompt := st.chat_input("Şirket belgeleriniz hakkında bir soru sorun (ör. 
     with st.chat_message("assistant"):
         sources = []
         full_answer = []
-        verified = None
-        warning_msg = None
+        audit_state = {"verified": None, "warning_msg": None}
 
         def response_generator():
-            nonlocal verified, warning_msg
             for event in stream_rag_api(prompt):
                 event_type = event.get("type")
                 if event_type == "sources":
@@ -250,17 +248,17 @@ if prompt := st.chat_input("Şirket belgeleriniz hakkında bir soru sorun (ör. 
                     full_answer.append(token)
                     yield token
                 elif event_type == "grade":
-                    verified = event.get("passed", True)
+                    audit_state["verified"] = event.get("passed", True)
                 elif event_type == "warning":
-                    warning_msg = event.get("message", "")
+                    audit_state["warning_msg"] = event.get("message", "")
 
         # Streamlit st.write_stream ile canlı akışı ekrana bas
         st.write_stream(response_generator())
 
         # Uyarı veya Doğrulama rozeti
-        if warning_msg:
-            st.warning(warning_msg)
-        elif verified is True and sources:
+        if audit_state["warning_msg"]:
+            st.warning(audit_state["warning_msg"])
+        elif audit_state["verified"] is True and sources:
             st.caption("🛡️ *LangGraph Denetimi: Şirket belgeleriyle doğrulandı.*")
 
         # Kaynakları göster
@@ -277,5 +275,5 @@ if prompt := st.chat_input("Şirket belgeleriniz hakkında bir soru sorun (ör. 
             "role": "assistant",
             "content": "".join(full_answer),
             "sources": sources,
-            "verified": verified
+            "verified": audit_state["verified"]
         })
