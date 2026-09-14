@@ -2,7 +2,7 @@ import os
 import torch
 from typing import TypedDict, Literal
 from langgraph.graph import StateGraph, END
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig, TextIteratorStreamer
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TextIteratorStreamer
 from threading import Thread
 from src.config import LLM_MODEL_NAME, USE_4BIT_QUANTIZATION
 from src.rag_engine import RAGEngine
@@ -52,12 +52,6 @@ class EnterpriseRAGAgent:
         self.model = AutoModelForCausalLM.from_pretrained(
             LLM_MODEL_NAME,
             **model_kwargs
-        )
-
-        self.generator = pipeline(
-            "text-generation",
-            model=self.model,
-            tokenizer=self.tokenizer
         )
 
         self.app = self._build_graph()

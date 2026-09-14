@@ -2,12 +2,13 @@ import os
 import torch
 from sentence_transformers import SentenceTransformer, CrossEncoder
 import chromadb
-from src.config import EMBEDDING_MODEL_NAME, RERANKER_MODEL_NAME, VECTOR_DB_PATH, RERANKER_TOP_N
+from src.config import EMBEDDING_MODEL_NAME, RERANKER_MODEL_NAME, VECTOR_DB_PATH, RERANKER_TOP_N, RAG_DEVICE
 
 
 class RAGEngine:
     def __init__(self):
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = RAG_DEVICE
+        print(f"[RAG Engine] Embedding ve Reranker '{device}' üzerinde çalıştırılıyor...")
 
         # Çok Dilli Embedding Modeli (BAAI/bge-m3)
         is_local_embed = os.path.exists(EMBEDDING_MODEL_NAME)

@@ -33,6 +33,44 @@ agent = EnterpriseRAGAgent(rag_engine)
 document_loader = DocumentLoader(DOCS_PATH)
 
 
+def auto_index_on_startup():
+    """Sunucu başlarken data/ klasöründeki henüz indekslenmemiş belgeleri otomatik algılayıp ChromaDB'ye ekler."""
+    if not os.path.exists(DOCS_PATH):
+        os.makedirs(DOCS_PATH)
+        return
+
+    db_stats = rag_engine.get_stats()
+    indexed_files = set(db_stats.get("document_chunks", {}).keys())
+
+    supported_exts = {".pdf", ".docx", ".txt"}
+    data_files = [
+        f for f in os.listdir(DOCS_PATH)
+        if os.path.isfile(os.path.join(DOCS_PATH, f)) and os.path.splitext(f)[1].lower() in supported_exts
+    ]
+
+    unindexed = [f for f in data_files if f not in indexed_files]
+
+    if not unindexed:
+        print(f"[Otomatik İndeksleme] data/ klasöründe indekslenmemiş belge yok. ({len(indexed_files)} belge zaten indeksli)")
+        return
+
+    print(f"[Otomatik İndeksleme] {len(unindexed)} yeni belge tespit edildi, indeksleniyor...")
+    for filename in unindexed:
+        file_path = os.path.join(DOCS_PATH, filename)
+        chunks, ids, metadatas = document_loader.load_and_chunk_file(file_path)
+        if chunks:
+            rag_engine.add_documents(chunks, ids, metadatas)
+            print(f"  ✓ '{filename}' → {len(chunks)} parça indekslendi.")
+        else:
+            print(f"  ✗ '{filename}' → ayrıştırılabilir metin bulunamadı.")
+
+    print(f"[Otomatik İndeksleme] Tamamlandı!")
+
+
+# Sunucu başlarken otomatik indekslemeyi çalıştır
+auto_index_on_startup()
+
+
 class QueryRequest(BaseModel):
     question: str
 

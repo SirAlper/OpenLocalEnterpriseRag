@@ -24,4 +24,9 @@ os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # PyTorch 4-bit kuantizasyon ayarı (1.5B model BF16'da sadece 2.8GB VRAM tüketir, 4-bit Türkçe kalitesini bozduğu için False)
-USE_4BIT_QUANTIZATION = False
+USE_4BIT_QUANTIZATION = False
+
+# Embedding ve Reranker Cihazı:
+# LLM tek başına GPU VRAM'e (~3 GB) tam sığsın ve VRAM aşımıyla Windows sanal bellek (pagefile) patlamasın diye
+# Embedding ve Reranker sorgulamaları hafif olduğundan CPU üzerinde çalıştırılır.
+RAG_DEVICE = os.getenv("RAG_DEVICE", "cpu")

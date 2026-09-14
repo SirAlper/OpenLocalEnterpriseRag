@@ -27,7 +27,8 @@ for item in models:
     snapshot_download(
         repo_id=item["repo_id"],
         local_dir=item["local_dir"],
-        resume_download=True
+        resume_download=True,
+        ignore_patterns=["*.onnx", "*.onnx_data", "onnx/*", "imgs/*", "*.jpg", "*.png"]
     )
 
 print("\n Modeller başarıyla doğrudan './models' klasörüne sabitlendi! Artık temp/cache şişmesi olmadan çalışabilirsin.")
