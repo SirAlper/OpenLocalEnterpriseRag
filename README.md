@@ -50,10 +50,10 @@ Pek çok kurumsal firma, veri sızıntısı riskleri, regülasyonlar (KVKK, GDPR
 +-------------|-----------------------------------------------------------+
               |
               v
-+-----------------------------+
-|     ChromaDB Vector Store   |
-|  (all-MiniLM-L6-v2 Embeds)  |
-+-----------------------------+
++-----------------------------+     +-------------------------------+
+|     ChromaDB Vector Store   |     |    CrossEncoder Reranker      |
+|    (BAAI/bge-m3 Embeds)     |     |  (BAAI/bge-reranker-v2-m3)   |
++-----------------------------+     +-------------------------------+
 ```
 
 ---
@@ -75,10 +75,10 @@ Pek çok kurumsal firma, veri sızıntısı riskleri, regülasyonlar (KVKK, GDPR
 | **İşletim Sistemi** | Ubuntu 22.04 LTS / Windows 11 | Ubuntu 22.04 LTS / Windows 11 |
 | **Python** | 3.10+ | 3.11 / 3.12 |
 | **Sistem Belleği (RAM)** | 8 GB DDR4 | 16 GB+ RAM |
-| **GPU / VRAM** | NVIDIA GPU (**Min 2-4 GB VRAM - 4-bit Kuantize**) | NVIDIA RTX 3060 / 4060+ (6+ GB VRAM) |
+| **GPU / VRAM** | NVIDIA GPU (**Min 4-6 GB VRAM**) | NVIDIA RTX 3060 / 4060+ (8+ GB VRAM) |
 | **CUDA Desteği** | CUDA 11.8+ | CUDA 12.1+ |
 
-*(Not: PyTorch 4-bit NF4 kuantizasyonu sayesinde model sadece ~1.2 GB VRAM tüketir. GPU bulunmadığında CPU üzerinde de çalıştırılabilir.)*
+*(Not: bge-m3 Embedding (~1.1 GB) + bge-reranker-v2-m3 (~1.1 GB) + Qwen2.5-1.5B LLM (~2.8 GB BF16) = toplam ~5 GB VRAM. GPU bulunmadığında CPU üzerinde de çalıştırılabilir.)*
 
 ---
 
@@ -238,7 +238,9 @@ curl -X POST "http://localhost:8000/api/v1/query-stream" \
 ### 🧠 Gelişmiş RAG Teknikleri (Advanced Retrieval)
 - [x] **Kaynak Gösterimi (Citation & Source Attribution):** Üretilen yanıtın hangi belgeden, sayfadan ve metin parçasından alındığını gösteren referans mekanizması.
 - [x] **Vektör Mesafe Eşiği (Distance Thresholding):** Alakasız belgelerin bağlama eklenmesini ve halüsinasyonu engelleyen semantik skor filtresi.
-- [ ] **Reranker (Yeniden Sıralayıcı):** ChromaDB'den dönen sonuçları `bge-reranker` gibi hafif bir modelle yeniden puanlayarak en alakalı bağlamı seçme.
+- [x] **Çok Dilli Embedding (BAAI/bge-m3):** 100+ dil destekli, Türkçe semantik arama başarısı yüksek embedding modeli ile arama isabetinin artırılması.
+- [x] **Reranker (Yeniden Sıralayıcı):** ChromaDB'den dönen aday parçaları `bge-reranker-v2-m3` CrossEncoder modeli ile yeniden puanlayarak en alakalı bağlamı seçme.
+- [x] **Bağlamsal Parçalama (Contextual Chunking):** Her metin parçasının başına ait olduğu belge başlığı ve kodunu otomatik enjekte ederek bağlam kaybını önleme.
 - [ ] **Hibrit Arama (Hybrid Search):** Anlamsal vektör araması ile anahtar kelime aramasını (BM25) RRF (Reciprocal Rank Fusion) ile birleştirme.
 - [ ] **Zengin Format & Tablo Desteği:** Excel (`.xlsx`), CSV ve tablolardan oluşan kurumsal veriler için yapısal veri ayrıştırma (parsing/chunking).
 

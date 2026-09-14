@@ -1,15 +1,28 @@
 import os
 import torch
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 import chromadb
-from src.config import EMBEDDING_MODEL_NAME, VECTOR_DB_PATH
+from src.config import EMBEDDING_MODEL_NAME, RERANKER_MODEL_NAME, VECTOR_DB_PATH, RERANKER_TOP_N
 
 
 class RAGEngine:
     def __init__(self):
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        is_local = os.path.exists(EMBEDDING_MODEL_NAME)
-        self.embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME, device=device, local_files_only=is_local)
+
+        # Çok Dilli Embedding Modeli (BAAI/bge-m3)
+        is_local_embed = os.path.exists(EMBEDDING_MODEL_NAME)
+        print(f"Çok Dilli Embedding Modeli ({EMBEDDING_MODEL_NAME.split(os.sep)[-1]}) yükleniyor...")
+        self.embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME, device=device, local_files_only=is_local_embed)
+
+        # Reranker Modeli (BAAI/bge-reranker-v2-m3)
+        is_local_reranker = os.path.exists(RERANKER_MODEL_NAME)
+        print(f"Reranker Modeli ({RERANKER_MODEL_NAME.split(os.sep)[-1]}) yükleniyor...")
+        self.reranker = CrossEncoder(
+            RERANKER_MODEL_NAME,
+            max_length=512,
+            device=device,
+            local_files_only=is_local_reranker
+        )
 
         print("Yerel Vektör Veritabanı (ChromaDB) başlatılıyor...")
         self.client = chromadb.PersistentClient(path=VECTOR_DB_PATH)
@@ -63,9 +76,14 @@ class RAGEngine:
             "document_chunks": doc_counts
         }
 
-    def search(self, query: str, n_results: int = 3, max_distance: float = 1.35) -> dict:
-        """Soruya en yakın şirket belgelerini ve kaynak metaverilerini bulur.
-        max_distance eşiğinden yüksek (alakasız) parçaları eler.
+    def search(self, query: str, n_results: int = 10, max_distance: float = 1.35) -> dict:
+        """Soruya en yakın şirket belgelerini bulur ve Reranker ile yeniden sıralayarak en alakalı parçaları döner.
+
+        Arama Akışı:
+        1. ChromaDB'den geniş aday havuzu çek (n_results=10).
+        2. max_distance eşiğiyle ilk filtrelemeyi yap.
+        3. Kalan adayları CrossEncoder (Reranker) ile soru-belge çifti olarak puanla.
+        4. En yüksek puanlı RERANKER_TOP_N parçayı döndür.
         """
         if self.collection.count() == 0:
             return {"context": "", "sources": []}
@@ -83,24 +101,48 @@ class RAGEngine:
         metadatas = results.get("metadatas", [[]])[0]
         distances = results.get("distances", [[]])[0]
 
-        filtered_docs = []
-        sources = []
+        # 1. Mesafe eşiğiyle ilk filtreleme
+        candidates = []
         for doc_text, meta, dist in zip(retrieved_docs, metadatas, distances):
             dist_val = round(float(dist), 4) if dist is not None else None
-            
-            # Belirlenen eşikten daha uzak (alakasız) belgeleri bağlama dahil etme
+
             if dist_val is not None and max_distance is not None and dist_val > max_distance:
                 continue
 
-            filtered_docs.append(doc_text)
+            candidates.append({
+                "doc_text": doc_text,
+                "meta": meta,
+                "distance": dist_val
+            })
+
+        if not candidates:
+            return {"context": "", "sources": []}
+
+        # 2. Reranker ile yeniden puanlama
+        pairs = [[query, c["doc_text"]] for c in candidates]
+        reranker_scores = self.reranker.predict(pairs).tolist()
+
+        for candidate, score in zip(candidates, reranker_scores):
+            candidate["reranker_score"] = round(float(score), 4)
+
+        # 3. Reranker skoruna göre sırala ve en iyi RERANKER_TOP_N parçayı seç
+        candidates.sort(key=lambda x: x["reranker_score"], reverse=True)
+        top_candidates = candidates[:RERANKER_TOP_N]
+
+        filtered_docs = []
+        sources = []
+        for c in top_candidates:
+            filtered_docs.append(c["doc_text"])
+            meta = c["meta"]
             sources.append({
                 "source": meta.get("source", "Bilinmeyen Belge") if meta else "Bilinmeyen Belge",
                 "chunk_index": meta.get("chunk_index", 0) if meta else 0,
-                "content": doc_text,
-                "distance": dist_val
+                "content": c["doc_text"],
+                "distance": c["distance"],
+                "reranker_score": c["reranker_score"]
             })
 
         return {
             "context": "\n\n".join(filtered_docs),
             "sources": sources
-        }
+        }

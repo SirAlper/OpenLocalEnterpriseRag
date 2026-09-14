@@ -1,4 +1,5 @@
 import os
+import re
 from pypdf import PdfReader
 from docx import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -12,6 +13,34 @@ class DocumentLoader:
             chunk_overlap=100,
             separators=["\n\n", "\n", ". ", " ", ""]
         )
+
+    @staticmethod
+    def _extract_document_header(content: str) -> str:
+        """Belge metninin ilk satırlarından DOKÜMAN ve KOD bilgisini çıkararak bağlamsal başlık oluşturur.
+
+        Örnek çıktı: '[Belge: NovaTech Bilgi Güvenliği ve Cihaz Kullanım Esasları | KOD: SEC-POL-04]'
+        Başlık bulunamazsa dosya adından türetilmez; boş döner.
+        """
+        lines = content.strip().split("\n")[:5]  # İlk 5 satırı tara
+
+        doc_title = ""
+        doc_code = ""
+
+        for line in lines:
+            stripped = line.strip()
+            # "DOKÜMAN:" veya "DOKÜMAN :" formatını yakala
+            if re.match(r"^DOKÜMAN\s*:", stripped, re.IGNORECASE):
+                doc_title = re.sub(r"^DOKÜMAN\s*:\s*", "", stripped, flags=re.IGNORECASE).strip()
+            # "KOD:" veya "KOD :" formatını yakala
+            elif re.match(r"^KOD\s*:", stripped, re.IGNORECASE):
+                doc_code = re.sub(r"^KOD\s*:\s*", "", stripped, flags=re.IGNORECASE).strip()
+
+        if doc_title and doc_code:
+            return f"[Belge: {doc_title} | KOD: {doc_code}]"
+        elif doc_title:
+            return f"[Belge: {doc_title}]"
+
+        return ""
 
     def _read_pdf(self, file_path: str) -> str:
         reader = PdfReader(file_path)
@@ -31,7 +60,7 @@ class DocumentLoader:
             return f.read()
 
     def load_and_chunk_file(self, file_path: str):
-        """Tek bir belgeyi okur ve parçalar."""
+        """Tek bir belgeyi okur, başlık enjekte eder ve parçalar."""
         chunks = []
         ids = []
         metadatas = []
@@ -56,12 +85,25 @@ class DocumentLoader:
         if not content.strip():
             return chunks, ids, metadatas
 
+        # Bağlamsal başlığı çıkar (Contextual Chunking)
+        doc_header = self._extract_document_header(content)
+
         chunk_texts = self.text_splitter.split_text(content)
         for idx, chunk in enumerate(chunk_texts):
+            # Her parçanın başına belge başlığını enjekte et
+            if doc_header and not chunk.strip().startswith("[Belge:"):
+                contextualized_chunk = f"{doc_header}\n{chunk}"
+            else:
+                contextualized_chunk = chunk
+
             chunk_id = f"{filename}_chunk_{idx}"
-            chunks.append(chunk)
+            chunks.append(contextualized_chunk)
             ids.append(chunk_id)
-            metadatas.append({"source": filename, "chunk_index": idx})
+            metadatas.append({
+                "source": filename,
+                "chunk_index": idx,
+                "document_title": doc_header
+            })
 
         return chunks, ids, metadatas
 
@@ -85,4 +127,4 @@ class DocumentLoader:
             all_ids.extend(ids)
             metadatas.extend(metas)
 
-        return all_chunks, all_ids, metadatas
+        return all_chunks, all_ids, metadatas
