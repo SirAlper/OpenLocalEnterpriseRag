@@ -58,13 +58,25 @@ Pek çok kurumsal firma, veri sızıntısı riskleri, regülasyonlar (KVKK, GDPR
 
 ---
 
-## 🚀 Temel Özellikler
+## 🚀 Temel Özellikler ve Gelişmiş Yetenekler
 
-* **%100 Veri Gizliliği:** Harici sunuculara veya API'lere hiçbir istek iletilmez.
-* **Hafif ve Hızlı Vektör Arama:** Kalıcı (Persistent) ChromaDB motoruyla milisaniyeler seviyesinde yerel semantik arama.
-* **Ajan Karar Döngüsü (LangGraph):** Arama ve üretim safhalarını modüler düğümler halinde yöneten grafik tabanlı mimari.
-* **Optimize Model Desteği:** Tüketici sınıfı veya kurumsal GPU'larda bfloat16/int4 formatlarında çalışabilen küçük dil modelleri (SLM).
-* **Üretime Hazır API:** Otomatik Swagger/OpenAPI dokümantasyonuna sahip modern FastAPI altyapısı.
+* **%100 Yerel ve Sıfır Veri Bağımlılığı:** Harici bulut sağlayıcılarına (OpenAI vb.) hiçbir veri iletilmez. Tüm embedding, reranking ve LLM çıkarımı yerel donanımda gerçekleşir.
+* **İki Aşamalı Arama & Yeniden Sıralama (Two-Stage Retrieval & Reranker):**
+  * **Birinci Aşama:** BAAI/bge-m3 çok dilli embedding modeli ile ChromaDB üzerinde milisaniyeler seviyesinde vektör arama.
+  * **Vektör Mesafe Eşiği (Distance Threshold):** Alakasız ve düşük benzerlikli doküman parçalarını filtreleyen skor kalkanı.
+  * **İkinci Aşama:** BAAI/bge-reranker-v2-m3 CrossEncoder modeliyle aday parçaları soru-metin çifti olarak yeniden puanlayarak en alakalı bağlamı (`RERANKER_TOP_N`) seçme.
+* **Bağlamsal & Artımlı İndeksleme (Contextual & Incremental Indexing):**
+  * **Contextual Chunking:** Her metin parçacığının başına ait olduğu belge başlığı ve kodunu otomatik enjekte ederek semantik bağlam kaybını engelleme.
+  * **Artımlı İndeksleme:** Sunucu başlarken `data/` klasöründeki yeni belgeleri otomatik algılayıp yalnızca eksik olanları indeksleme.
+* **LangGraph Tabanlı Ajan Döngüsü (Agentic RAG):** Arama (`Retrieve`), üretim (`Generate`) ve doğrulama düğümlerini durum tabanlı graf mimarisiyle yönetme.
+* **Halüsinasyon Denetimi ve Sadakat Kontrolü (Hallucination Grader / Self-RAG):** Üretilen yanıtın verilen şirket bağlamına sadakatini kontrol eden ve gerekirse güvenli geri dönüş (`fallback`) mekanizmasını tetikleyen karar yapısı.
+* **Kaynak Gösterimi ve Doğrulanabilirlik (Citations & Attribution):** Yanıtın hangi belgeden, hangi parça indeksinden ve hangi benzerlik skoruyla alındığını şeffafça sunma.
+* **Gerçek Zamanlı Canlı Akış (Streaming via NDJSON):** `TextIteratorStreamer` tabanlı token akışını LangGraph düğüm durumları (`status`), alıntılanan kaynaklar (`sources`) ve doğrulama sonucuyla (`grade`) senkronize iletme.
+* **Donanım ve Bellek Optimizasyonları:**
+  * **bfloat16 & 4-bit (NF4) Kuantizasyon:** RTX 3060 gibi tüketici kartlarında dahi ~5 GB VRAM ile tam Türkçe çıkarım.
+  * **Sabit Yerel Dizin (`./models`):** Modelleri proje dizininde sabitleyerek sistem önbelleklerinin (`~/.cache`, `Temp`) şişmesini önleme.
+  * **Genişletilmiş Çıkarım Penceresi:** 512 token üretim sınırı ve SDPA dikkat hızlandırması.
+* **Kurumsal REST API:** FastAPI ile modüler uç noktalar, dosya yükleme/silme yönetimi ve otomatik OpenAPI/Swagger arayüzü.
 
 ---
 
@@ -235,31 +247,28 @@ curl -X POST "http://localhost:8000/api/v1/query-stream" \
 
 ## 🗺️ Gelecek Yol Haritası (Roadmap)
 
-### 🧠 Gelişmiş RAG Teknikleri (Advanced Retrieval)
-- [x] **Kaynak Gösterimi (Citation & Source Attribution):** Üretilen yanıtın hangi belgeden, sayfadan ve metin parçasından alındığını gösteren referans mekanizması.
-- [x] **Vektör Mesafe Eşiği (Distance Thresholding):** Alakasız belgelerin bağlama eklenmesini ve halüsinasyonu engelleyen semantik skor filtresi.
-- [x] **Çok Dilli Embedding (BAAI/bge-m3):** 100+ dil destekli, Türkçe semantik arama başarısı yüksek embedding modeli ile arama isabetinin artırılması.
-- [x] **Reranker (Yeniden Sıralayıcı):** ChromaDB'den dönen aday parçaları `bge-reranker-v2-m3` CrossEncoder modeli ile yeniden puanlayarak en alakalı bağlamı seçme.
-- [x] **Bağlamsal Parçalama (Contextual Chunking):** Her metin parçasının başına ait olduğu belge başlığı ve kodunu otomatik enjekte ederek bağlam kaybını önleme.
-- [ ] **Hibrit Arama (Hybrid Search):** Anlamsal vektör araması ile anahtar kelime aramasını (BM25) RRF (Reciprocal Rank Fusion) ile birleştirme.
-- [ ] **Zengin Format & Tablo Desteği:** Excel (`.xlsx`), CSV ve tablolardan oluşan kurumsal veriler için yapısal veri ayrıştırma (parsing/chunking).
+### 🔍 1. İleri Düzey Arama & Zengin Veri Desteği (Advanced Retrieval & Multi-Modal)
+- [ ] **Hibrit Arama (Hybrid Search / BM25 + Vektör):** Anlamsal vektör araması ile anahtar kelime/kod aramasını (BM25) Reciprocal Rank Fusion (RRF) ile birleştirerek arama isabetini maksimize etme.
+- [ ] **Zengin Format & Tablo Ayrıştırma:** Excel (`.xlsx`), CSV ve karmaşık PDF tablolarından oluşan kurumsal veriler için yapısal veri ayrıştırma (unstructured table parsing & chunking).
+- [ ] **Hiyerarşik & Parent-Child Parçalama:** Küçük metin parçalarıyla hassas arama yapıp LLM üretimine üst başlık ve geniş bağlamı sunan iki katmanlı indeksleme.
+- [ ] **Graf Tabanlı RAG (GraphRAG):** Kurumsal belgeler arasındaki varlıkları (Entity) ve ilişkileri bilgi grafiğine (Knowledge Graph) dönüştürerek derin nedensellik sorguları yapabilme.
 
-### 🤖 LangGraph & Ajan Mimarisi (Agentic RAG)
-- [x] **Halüsinasyon Denetleyici & Özyansıma (Hallucination Grader / Self-RAG):** Üretilen cevabın verilen bağlama sadakatini denetleyen ve gerekirse güvenli fallback düğümüne yönlendiren koşullu kontrol döngüsü.
-- [x] **LangGraph & Streaming Tam Senkronizasyonu:** Canlı token akışını graf düğümlerini atlamadan, adım adım durum (`status`), kaynak (`sources`) ve doğrulama (`grade`) olaylarıyla senkronize ileten altyapı.
-- [ ] **Sohbet Geçmişi & Bellek (Multi-Turn Chat History):** LangGraph Memory / Checkpointer entegrasyonu ile oturum bazlı bağlam takibi.
+### 🤖 2. Yeni Nesil Ajan Mimarisi (Next-Gen Agentic RAG)
+- [ ] **Çok Turlu Sohbet Belleği (Multi-Turn Chat with Checkpointer):** LangGraph Memory / SqliteSaver entegrasyonu ile kullanıcı oturumlarını ve önceki konuşma bağlamını hatırlama.
+- [ ] **Dinamik Sorgu Yeniden Yazma (Query Rewriter & Expansion):** Kullanıcının eksik veya muğlak sorularını vektör aramasına en uygun formata çeviren akıllı ajan düğümü.
+- [ ] **Yönlendirici & Çoklu Ajan Orkestrasyonu (Router & Multi-Agent Teams):** Soruları şirket dokümanı, ilişkisel veritabanı sorgusu (Text-to-SQL) veya yerel araçlara dinamik yönlendiren süpervizör ajan mimarisi.
+- [ ] **Kullanıcı Geri Bildirim Döngüsü (Feedback Loop):** Web arayüzü üzerinden yanıtları beğenme/beğenmeme (Thumbs up/down) metriklerini toplayarak retrieval doğruluğunu sürekli izleme.
 
-### ⚡ Performans ve Hız Optimizasyonu
-- [x] **Akışkan Yanıt (Streaming via TextIteratorStreamer & NDJSON):** Yanıtların kelime kelime ekrana dökülmesini sağlayan yüksek performanslı akış mimarisi ve Streamlit `st.write_stream` entegrasyonu.
-- [x] **Optimize Donanım Hassasiyeti (bfloat16):** RTX 3060 gibi GPU'larda 2.8 GB VRAM ile tam hassasiyetli ve bozulmasız Türkçe çıkarım.
-- [x] **Genişletilmiş Token Limiti (512 max_new_tokens):** Uzun kurumsal politika ve maddeli metinlerde yanıtın kesilmesini önleyen optimize üretim penceresi.
-- [x] **Sabit Yerel Model Dizini (`./models`):** Modelleri doğrudan proje içinde tekil saklayarak `~/.cache` ve `Temp` şişmesini engelleyen mimari.
-- [x] **Artımlı (Incremental) İndeksleme:** Yalnızca yeni yüklenen belgeleri işleyen ve arka planda çalışan optimize yükleme hattı.
+### ⚡ 3. Çıkarım Motoru & Performans Hızlandırma (Serving Optimization)
+- [ ] **Optimize Çıkarım Motoru Entegrasyonu (vLLM / llama.cpp):** Sürekli batching (continuous batching) ve PagedAttention ile çoklu eşzamanlı isteklerde çıkarım hızını katlayarak artırma.
+- [ ] **Semantik Önbellekleme (Semantic Caching):** Daha önce sorulmuş benzer kurumsal soruları vektör benzerliğiyle önbelleğe alıp (Redis / GPTCache) sıfır GPU maliyetiyle anında yanıtlama.
+- [ ] **Spekülatif Kod Çözme (Speculative Decoding):** Küçük bir taslak model (draft model) kullanarak yerel LLM üretim hızını iki katına çıkarma.
 
-### 🏢 Kurumsal Güvenlik & İzlenebilirlik (Enterprise Readiness)
-- [ ] **Kullanıcı Yetkilendirme & RBAC:** Kullanıcı/departman rollerine göre belge ve koleksiyon erişim kontrolü.
-- [ ] **Gözlemlenebilirlik (Observability / Tracing):** Yanıt gecikmesi, token ve erişim metriklerini takip etmek için Langfuse veya Arize Phoenix entegrasyonu.
-- [ ] **Konteynerizasyon:** GPU destekli Docker ve Docker-Compose ile tek komutla kurulum altyapısı.
+### 🏢 4. Kurumsal Güvenlik, Uyumluluk & DevOps (Enterprise Readiness)
+- [ ] **Rol Tabanlı Erişim Kontrolü (RBAC):** Kullanıcı ve departman (İK, Hukuk, Finans, Mühendislik) rollerine göre ChromaDB koleksiyon ve doküman seviyesinde yetkilendirme.
+- [ ] **Gözlemlenebilirlik & İzleme (Observability & Tracing):** Yanıt gecikmesi, token tüketimi ve arama isabetini analiz etmek için Langfuse, Arize Phoenix veya OpenTelemetry entegrasyonu.
+- [ ] **Tek Komutla Konteynerizasyon (Docker & NVIDIA Container Toolkit):** GPU geçişli Dockerfile ve Docker-Compose dosyaları ile sıfır konfigürasyonlu sunucu kurulumu.
+- [ ] **Kurumsal SSO & LDAP Entegrasyonu:** Active Directory, Keycloak ve Okta ile tek noktadan güvenli kurumsal oturum açma altyapısı.
 
 ---
 
