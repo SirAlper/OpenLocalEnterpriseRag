@@ -160,7 +160,8 @@ async def upload_file(file: UploadFile = File(...)):
             "chunk_count": 0
         }
 
-    # 3. Vektör tabanına yaz
+    # 3. Vektör tabanına yaz (Güncelleme durumunda önce eski parçaları temizle)
+    rag_engine.delete_document(file.filename)
     rag_engine.add_documents(chunks, ids, metadatas)
 
     return {
@@ -203,4 +204,5 @@ def query_rag_stream(request: QueryRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("src.main:app", host="0.0.0.0", port=8000, reload=True)
+    # Dosya yüklemelerinde sunucunun modeli bellekten düşürüp baştan yüklemesini önlemek için reload=False
+    uvicorn.run("src.main:app", host="0.0.0.0", port=8000, reload=False)

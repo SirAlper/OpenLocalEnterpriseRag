@@ -1,11 +1,11 @@
-import os
-import torch
-from typing import TypedDict, Literal
+from typing import TypedDict
 from langgraph.graph import StateGraph, END
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TextIteratorStreamer
-from threading import Thread
-from src.config import LLM_MODEL_NAME, USE_4BIT_QUANTIZATION
+from src.llm import create_chat_model
 from src.rag_engine import RAGEngine
+from src.nodes import AgentNodes
+from src.prompts import (
+    build_rag_messages, NO_CONTEXT_RESPONSE, FALLBACK_RESPONSE
+)
 
 
 class AgentState(TypedDict):
@@ -19,208 +19,33 @@ class AgentState(TypedDict):
 class EnterpriseRAGAgent:
     def __init__(self, rag_engine: RAGEngine):
         self.rag_engine = rag_engine
-        is_cuda = torch.cuda.is_available()
-        device_str = "CUDA GPU" if is_cuda else "CPU"
-        print(f"Yerel Dil Modeli ({LLM_MODEL_NAME}) {device_str} üzerinde yükleniyor...")
-
-        is_local = os.path.exists(LLM_MODEL_NAME)
-        self.tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_NAME, local_files_only=is_local)
-
-        # PyTorch 4-bit Kuantizasyon & Bellek Optimizasyonu
-        quantization_config = None
-        torch_dtype = torch.bfloat16 if is_cuda else torch.float32
-
-        if is_cuda and USE_4BIT_QUANTIZATION:
-            print("[PyTorch] 4-bit (NF4) Kuantizasyon aktif ediliyor...")
-            quantization_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_quant_type="nf4",
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_compute_dtype=torch.bfloat16
-            )
-
-        model_kwargs = {
-            "torch_dtype": torch_dtype,
-            "device_map": "auto" if is_cuda else None,
-            "local_files_only": is_local,
-        }
-        if quantization_config:
-            model_kwargs["quantization_config"] = quantization_config
-        elif is_cuda:
-            model_kwargs["attn_implementation"] = "sdpa"
-
-        self.model = AutoModelForCausalLM.from_pretrained(
-            LLM_MODEL_NAME,
-            **model_kwargs
-        )
-
+        self.chat_model = create_chat_model()
+        self.nodes = AgentNodes(self.chat_model, self.rag_engine)
         self.app = self._build_graph()
-
-    @staticmethod
-    def _is_greeting(query: str) -> bool:
-        """Kullanıcı girdisinin selamlama olup olmadığını kontrol eder."""
-        greetings = ["merhaba", "selam", "günaydın", "iyi günler", "iyi akşamlar", "hey", "nasılsın", "kolay gelsin", "merhabalar"]
-        cleaned = query.strip().lower()
-        return any(cleaned.startswith(g) or cleaned == g for g in greetings)
-
-    def _build_messages(self, context: str, question: str) -> list[dict]:
-        """Kullanıcı sorusu ve bağlam için optimize edilmiş chat şablonunu oluşturur."""
-        system_instruction = (
-            "Sen kurumsal bir yapay zeka asistanısın.\n"
-            "Sana sunulan Bağlamdaki şirket belgelerine birebir sadık kalarak, soruyu Türkçe, net, eksiksiz ve profesyonel bir şekilde yanıtla.\n"
-            "Kurallar:\n"
-            "1. Yalnızca soruyla DOĞRUDAN ilgili olan belge ve maddeleri yanıtla.\n"
-            "2. Bağlamda soruyla ilgisiz farklı konulara ait bilgiler varsa (örneğin donanım, izin, bütçe vb.) bunları kesinlikle yanıta dahil etme.\n"
-            "3. Belgede yer almayan hiçbir bilgiyi uydurma (halüsinasyon yapma).\n"
-            "4. Cümleleri ve maddeleri eksiksiz, tam olarak bitir."
-        )
-
-        user_content = f"Bağlam:\n{context}\n\nSoru: {question}"
-
-        return [
-            {"role": "system", "content": system_instruction},
-            {"role": "user", "content": user_content}
-        ]
-
-    def _build_hallucination_message(self, context: str, question: str, answer: str) -> list[dict]:
-        """Kullanıcının sorusuna oluşturulan cevabın sunulan şirket belgelerine sadık kalıp kalmadığını kontrol eder."""
-        system_instruction = (
-            "Sen bir denetçisin. Sana sunulan Bağlamdaki şirket belgelerini ve üretilen Cevabı incele.\n"
-            "Cevaptaki tüm iddialar ve bilgiler Bağlam tarafından doğrulanıyor mu?\n"
-            "Cevap doğrulanıyorsa sadece 'evet', belgede olmayan uydurma veya çelişen bilgi varsa sadece 'hayır' yaz. Başka hiçbir şey yazma."
-        )
-
-        user_content = f"Bağlam:\n{context}\n\nSoru: {question}\n\nCevap:\n{answer}"
-
-        return [
-            {"role": "system", "content": system_instruction},
-            {"role": "user", "content": user_content}
-        ]
-
-    def decide_hallucinate(self, state: AgentState) -> Literal["end", "fallback"]:
-        """Hallucination sonucuna göre grafiğin rotasını belirler."""
-        grade = str(state.get("hallucination_grade", "")).strip().lower()
-        if "evet" in grade or "yes" in grade:
-            return "end"
-        return "fallback"
-
-    def _retrieve_node(self, state: AgentState) -> dict:
-        print("[LangGraph Node: retrieve] Belgeler aranıyor...")
-        search_result = self.rag_engine.search(state["question"])
-        return {
-            "context": search_result.get("context", ""),
-            "sources": search_result.get("sources", [])
-        }
-
-    def _generate_node(self, state: AgentState) -> dict:
-        print("[LangGraph Node: generate] Yanıt üretiliyor...")
-        context = state.get("context", "").strip()
-        question = state["question"]
-
-        # Bağlam boşsa doğrudan güvenli yanıt dön (LLM halüsinasyonunu engelle)
-        if not context:
-            if self._is_greeting(question):
-                return {"answer": "Merhaba! Ben kurumsal yapay zeka asistanınızım. Şirket içi belgelerinizle ilgili sorularınızı yanıtlayabilirim."}
-            return {"answer": "Bu bilgi şirket belgelerinde bulunmamaktadır."}
-
-        messages = self._build_messages(context, question)
-
-        prompt = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True
-        )
-
-        model_inputs = self.tokenizer([prompt], return_tensors="pt").to(self.model.device)
-
-        with torch.inference_mode():
-            outputs = self.model.generate(
-                **model_inputs,
-                max_new_tokens=512,
-                do_sample=False,
-                repetition_penalty=1.05
-            )
-
-        # Sadece yeni üretilen token'ları çöz (prompt kısmını at)
-        input_len = model_inputs["input_ids"].shape[1]
-        generated_tokens = outputs[0][input_len:]
-        answer = self.tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
-
-        return {"answer": answer}
-
-    def _grade_hallucination_node(self, state: AgentState) -> dict:
-        print("[LangGraph Node: grade] Halüsinasyon denetimi yapılıyor...")
-        context = state.get("context", "").strip()
-        question = state["question"]
-        answer = state.get("answer", "")
-
-        # Eğer bağlam boşsa (zaten selamlama veya güvenli red mesajı üretilmiştir), denetlemeye gerek yok
-        if not context:
-            return {"hallucination_grade": "evet"}
-
-        messages = self._build_hallucination_message(context, question, answer)
-
-        prompt = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True
-        )
-
-        model_inputs = self.tokenizer([prompt], return_tensors="pt").to(self.model.device)
-
-        with torch.inference_mode():
-            outputs = self.model.generate(
-                **model_inputs,
-                max_new_tokens=10,
-                do_sample=False,
-                repetition_penalty=1.0
-            )
-
-        # Sadece yeni üretilen token'ları çöz (prompt kısmını at)
-        input_len = model_inputs["input_ids"].shape[1]
-        generated_tokens = outputs[0][input_len:]
-        hallucination_grade = self.tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
-        print(f"Hallucination denetim sonucu: {hallucination_grade}")
-
-        return {"hallucination_grade": hallucination_grade}
-
-    def _fallback_node(self, state: AgentState) -> dict:
-        """Halüsinasyon tespit edildiğinde devreye giren güvenli yanıt düğümü."""
-        print("[LangGraph Node: fallback] Halüsinasyon tespit edildi, güvenli fallback devreye girdi!")
-        return {"answer": "Bu bilgi şirket belgelerinde tam olarak doğrulanamamaktadır."}
 
     def _build_graph(self):
         workflow = StateGraph(AgentState)
 
-        workflow.add_node("retrieve", self._retrieve_node)
-        workflow.add_node("generate", self._generate_node)
-        workflow.add_node("grade", self._grade_hallucination_node)
-        workflow.add_node("fallback", self._fallback_node)
+        workflow.add_node("retrieve", self.nodes.retrieve)
+        workflow.add_node("generate", self.nodes.generate)
+        workflow.add_node("grade", self.nodes.grade_hallucination)
+        workflow.add_node("fallback", self.nodes.fallback)
 
         workflow.set_entry_point("retrieve")
         workflow.add_edge("retrieve", "generate")
         workflow.add_edge("generate", "grade")
-
-        workflow.add_conditional_edges(
-            "grade",
-            self.decide_hallucinate,
-            {
-                "end": END,
-                "fallback": "fallback"
-            }
-        )
+        workflow.add_conditional_edges("grade", self.nodes.decide_hallucinate, {"end": END, "fallback": "fallback"})
         workflow.add_edge("fallback", END)
 
         return workflow.compile()
 
+    # ──────────────────────────── SORGU YÖNTEMLERİ ────────────────────────────
+
     def query(self, question: str) -> dict:
         """LangGraph iş akışını toplu (batch) olarak çalıştırır."""
         result = self.app.invoke({
-            "question": question,
-            "context": "",
-            "sources": [],
-            "answer": "",
-            "hallucination_grade": ""
+            "question": question, "context": "",
+            "sources": [], "answer": "", "hallucination_grade": ""
         })
         return {
             "answer": result.get("answer", ""),
@@ -229,118 +54,54 @@ class EnterpriseRAGAgent:
         }
 
     def stream_events(self, question: str):
-        """LangGraph iş akışı ile tam senkronize canlı akış (streaming) üretir.
-        
-        Akış Aşamaları:
-        1. [retrieve] Düğümü: İlgili belgeler taranır ve bulunan kaynaklar yield edilir.
-        2. [generate] Düğümü: Token'lar oluşturuldukça canlı aktarılır (max_new_tokens=512).
-        3. [grade] Düğümü: Halüsinasyon ve kaynak doğrulaması denetlenir.
-        4. [fallback/done]: Sonuç durum bilgisiyle sonlandırılır.
-        """
-        # Durum başlat
+        """LangGraph iş akışı ile tam senkronize canlı akış üretir."""
         state: AgentState = {
-            "question": question,
-            "context": "",
-            "sources": [],
-            "answer": "",
-            "hallucination_grade": ""
+            "question": question, "context": "",
+            "sources": [], "answer": "", "hallucination_grade": ""
         }
 
-        # 1. RETRIEVE DÜĞÜMÜ
+        # 1. RETRIEVE
         yield {"type": "status", "message": "🔍 İlgili şirket belgeleri taranıyor...", "node": "retrieve"}
-        retrieve_out = self._retrieve_node(state)
+        retrieve_out = self.nodes.retrieve(state)
         state["context"] = retrieve_out["context"]
         state["sources"] = retrieve_out["sources"]
-
-        # Bulunan kaynakları bildir
         yield {"type": "sources", "sources": state["sources"]}
 
-        # 2. BAĞLAM KONTROLÜ
         context = state["context"].strip()
         if not context:
-            if self._is_greeting(question):
-                fallback_msg = "Merhaba! Ben kurumsal yapay zeka asistanınızım. Şirket içi belgelerinizle ilgili sorularınızı yanıtlayabilirim."
-            else:
-                fallback_msg = "Bu bilgi şirket belgelerinde bulunmamaktadır."
-
-            for word in fallback_msg.split(" "):
+            for word in NO_CONTEXT_RESPONSE.split(" "):
                 yield {"type": "token", "token": word + " "}
-            
-            state["answer"] = fallback_msg
-            yield {"type": "done", "answer": fallback_msg}
+            yield {"type": "done", "answer": NO_CONTEXT_RESPONSE, "sources": []}
             return
 
-        # 3. GENERATE DÜĞÜMÜ (Canlı Token Akışı)
+        # 2. GENERATE (ChatHuggingFace Canlı Akış)
         yield {"type": "status", "message": "✍️ Yanıt oluşturuluyor...", "node": "generate"}
-
-        messages = self._build_messages(context, question)
-        prompt = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True
-        )
-
-        model_inputs = self.tokenizer([prompt], return_tensors="pt").to(self.model.device)
-
-        streamer = TextIteratorStreamer(
-            self.tokenizer,
-            skip_prompt=True,
-            skip_special_tokens=True
-        )
-
-        generation_kwargs = dict(
-            model_inputs,
-            streamer=streamer,
-            max_new_tokens=512,
-            do_sample=False,
-            repetition_penalty=1.05
-        )
-
-        thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
-        thread.start()
+        messages = build_rag_messages(context, question)
 
         generated_chunks = []
-        for new_text in streamer:
-            if new_text:
-                generated_chunks.append(new_text)
-                yield {"type": "token", "token": new_text}
+        for chunk in self.chat_model.stream(messages):
+            if chunk.content:
+                generated_chunks.append(chunk.content)
+                yield {"type": "token", "token": chunk.content}
 
-        thread.join()
-        full_answer = "".join(generated_chunks).strip()
-        state["answer"] = full_answer
+        state["answer"] = "".join(generated_chunks).strip()
 
-        # 4. GRADE (HALÜSİNASYON VE DOĞRULUK DENETİMİ) DÜĞÜMÜ
+        # 3. GRADE (Halüsinasyon Denetimi)
         yield {"type": "status", "message": "🛡️ Kaynak uyumu ve doğruluk denetleniyor...", "node": "grade"}
-        grade_out = self._grade_hallucination_node(state)
+        grade_out = self.nodes.grade_hallucination(state)
         state["hallucination_grade"] = grade_out["hallucination_grade"]
 
-        decision = self.decide_hallucinate(state)
+        decision = self.nodes.decide_hallucinate(state)
         if decision == "fallback":
-            # Halüsinasyon tespit edildi
-            yield {
-                "type": "warning",
-                "message": "⚠️ Üretilen yanıt şirket belgeleriyle tam olarak doğrulanamadı.",
-                "node": "fallback"
-            }
-            yield {
-                "type": "grade",
-                "grade": state["hallucination_grade"],
-                "passed": False
-            }
+            yield {"type": "warning", "message": "⚠️ Üretilen yanıt şirket belgeleriyle doğrulanamadı.", "node": "fallback"}
+            yield {"type": "grade", "grade": state["hallucination_grade"], "passed": False}
         else:
-            yield {
-                "type": "grade",
-                "grade": state["hallucination_grade"],
-                "passed": True
-            }
+            yield {"type": "grade", "grade": state["hallucination_grade"], "passed": True}
 
-        # 5. AKIŞ TAMAMLANDI
         yield {"type": "done", "answer": state["answer"], "sources": state["sources"]}
 
     def stream_query(self, question: str):
-        """Kullanıcı sorusuna sadece metin token akışı üretir."""
+        """Sadece metin token akışı üretir."""
         for event in self.stream_events(question):
             if event["type"] == "token":
                 yield event["token"]
-
-        

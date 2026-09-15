@@ -17,11 +17,18 @@ RERANKER_MODEL_NAME = LOCAL_RERANKER_PATH if os.path.exists(LOCAL_RERANKER_PATH)
 # Reranker sonrası LLM'e gönderilecek en alakalı parça sayısı
 RERANKER_TOP_N = 3
 
-# HuggingFace'in internete bağlanmasını ve ~/.cache dizinine kilit/önbellek yazmasını engelle
-os.environ["HF_HUB_OFFLINE"] = "1"
-os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+# Yalnızca tüm yerel modeller mevcutsa ve indirme modunda değilsek çevrimdışı modu etkinleştir
+ALL_LOCAL_MODELS_EXIST = (
+    os.path.exists(LOCAL_LLM_PATH)
+    and os.path.exists(LOCAL_EMBEDDING_PATH)
+    and os.path.exists(LOCAL_RERANKER_PATH)
+)
+if ALL_LOCAL_MODELS_EXIST and os.getenv("ALLOW_ONLINE_HF", "0") != "1":
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 # PyTorch 4-bit kuantizasyon ayarı (1.5B model BF16'da sadece 2.8GB VRAM tüketir, 4-bit Türkçe kalitesini bozduğu için False)
 USE_4BIT_QUANTIZATION = False

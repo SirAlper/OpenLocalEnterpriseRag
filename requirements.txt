@@ -3,6 +3,7 @@ sentence-transformers
 chromadb
 langgraph
 langchain-core
+langchain-huggingface
 fastapi
 uvicorn
 pydantic

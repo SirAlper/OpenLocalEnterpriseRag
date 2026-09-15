@@ -105,10 +105,14 @@ local-enterprise-rag/
 │   └── app.py             # Streamlit tabanlı modern kullanıcı ve yönetim arayüzü
 ├── src/
 │   ├── __init__.py
-│   ├── config.py          # Sistem, dosya yolları ve 4-bit model yapılandırması
+│   ├── config.py          # Sistem, dosya yolları ve model yapılandırması
+│   ├── llm.py             # ChatHuggingFace model yükleyici ve pipeline
+│   ├── prompts.py         # RAG ve halüsinasyon denetim promptları
 │   ├── document_loader.py # PDF/DOCX/TXT okuyucu ve artımlı metin parçalayıcı
-│   ├── rag_engine.py      # Embedding, silme, istatistik ve kaynaklı arama motoru
-│   ├── agent_graph.py     # LangGraph düğümleri, BitsAndBytes 4-bit ve SDPA çıkarımı
+│   ├── rag_engine.py      # Embedding, ChromaDB, CrossEncoder reranker motoru
+│   ├── nodes.py           # LangGraph düğüm fonksiyonları (retrieve, generate, grade)
+│   ├── agent_graph.py     # LangGraph graf orkestratörü ve canlı akış (streaming)
+│   ├── tools.py           # İsteğe bağlı harici araç tanımları
 │   └── main.py            # FastAPI sunucusu, yönetim ve REST API uç noktaları
 ├── download_model.py      # Modelleri doğrudan models/ içine indiren betik
 ├── requirements.txt       # Proje bağımlılıkları listesi

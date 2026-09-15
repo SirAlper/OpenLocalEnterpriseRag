@@ -37,7 +37,7 @@ class RAGEngine:
 
         embeddings = self.embedding_model.encode(documents, show_progress_bar=True).tolist()
 
-        self.collection.add(
+        self.collection.upsert(
             documents=documents,
             embeddings=embeddings,
             ids=ids,
@@ -98,9 +98,13 @@ class RAGEngine:
             include=["documents", "metadatas", "distances"]
         )
 
-        retrieved_docs = results.get("documents", [[]])[0]
-        metadatas = results.get("metadatas", [[]])[0]
-        distances = results.get("distances", [[]])[0]
+        docs_list = results.get("documents") or []
+        metas_list = results.get("metadatas") or []
+        dists_list = results.get("distances") or []
+
+        retrieved_docs = docs_list[0] if docs_list else []
+        metadatas = metas_list[0] if metas_list else []
+        distances = dists_list[0] if dists_list else []
 
         # 1. Mesafe eşiğiyle ilk filtreleme
         candidates = []
@@ -121,7 +125,11 @@ class RAGEngine:
 
         # 2. Reranker ile yeniden puanlama
         pairs = [[query, c["doc_text"]] for c in candidates]
-        reranker_scores = self.reranker.predict(pairs).tolist()
+        reranker_scores = self.reranker.predict(pairs)
+        if hasattr(reranker_scores, "tolist"):
+            reranker_scores = reranker_scores.tolist()
+        if isinstance(reranker_scores, (int, float)):
+            reranker_scores = [reranker_scores]
 
         for candidate, score in zip(candidates, reranker_scores):
             candidate["reranker_score"] = round(float(score), 4)

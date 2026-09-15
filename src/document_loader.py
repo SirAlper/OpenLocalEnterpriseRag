@@ -43,21 +43,40 @@ class DocumentLoader:
         return ""
 
     def _read_pdf(self, file_path: str) -> str:
-        reader = PdfReader(file_path)
-        text = ""
-        for page in reader.pages:
-            content = page.extract_text()
-            if content:
-                text += content + "\n"
-        return text
+        try:
+            reader = PdfReader(file_path)
+            text = ""
+            for page in reader.pages:
+                content = page.extract_text()
+                if content:
+                    text += content + "\n"
+            return text
+        except Exception as e:
+            print(f"[DocumentLoader] PDF okuma hatası ({os.path.basename(file_path)}): {e}")
+            return ""
 
     def _read_docx(self, file_path: str) -> str:
-        doc = Document(file_path)
-        return "\n".join([p.text for p in doc.paragraphs if p.text])
+        try:
+            doc = Document(file_path)
+            return "\n".join([p.text for p in doc.paragraphs if p.text])
+        except Exception as e:
+            print(f"[DocumentLoader] DOCX okuma hatası ({os.path.basename(file_path)}): {e}")
+            return ""
 
     def _read_txt(self, file_path: str) -> str:
-        with open(file_path, "r", encoding="utf-8") as f:
-            return f.read()
+        try:
+            with open(file_path, "r", encoding="utf-8-sig") as f:
+                return f.read()
+        except UnicodeDecodeError:
+            try:
+                with open(file_path, "r", encoding="cp1254", errors="replace") as f:
+                    return f.read()
+            except Exception as e:
+                print(f"[DocumentLoader] TXT okuma hatası ({os.path.basename(file_path)}): {e}")
+                return ""
+        except Exception as e:
+            print(f"[DocumentLoader] TXT okuma hatası ({os.path.basename(file_path)}): {e}")
+            return ""
 
     def load_and_chunk_file(self, file_path: str):
         """Tek bir belgeyi okur, başlık enjekte eder ve parçalar."""

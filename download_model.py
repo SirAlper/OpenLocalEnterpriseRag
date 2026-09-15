@@ -1,4 +1,10 @@
 import os
+
+# İndirme işlemi için Hugging Face Hub çevrimiçi erişimini sağla
+os.environ["ALLOW_ONLINE_HF"] = "1"
+os.environ["HF_HUB_OFFLINE"] = "0"
+os.environ["TRANSFORMERS_OFFLINE"] = "0"
+
 from huggingface_hub import snapshot_download
 from src.config import MODELS_DIR, LOCAL_LLM_PATH, LOCAL_EMBEDDING_PATH, LOCAL_RERANKER_PATH
 
@@ -31,4 +37,4 @@ for item in models:
         ignore_patterns=["*.onnx", "*.onnx_data", "onnx/*", "imgs/*", "*.jpg", "*.png"]
     )
 
-print("\n Modeller başarıyla doğrudan './models' klasörüne sabitlendi! Artık temp/cache şişmesi olmadan çalışabilirsin.")
+print("\n Modeller başarıyla doğrudan './models' klasörüne sabitlendi! Artık temp/cache şişmesi olmadan çalışabilirsin.")
