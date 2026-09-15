@@ -111,7 +111,8 @@ local-enterprise-rag/
 │   ├── document_loader.py # PDF/DOCX/TXT okuyucu ve artımlı metin parçalayıcı
 │   ├── rag_engine.py      # Embedding, ChromaDB, CrossEncoder reranker motoru
 │   ├── nodes.py           # LangGraph düğüm fonksiyonları (retrieve, generate, grade)
-│   ├── agent_graph.py     # LangGraph graf orkestratörü ve canlı akış (streaming)
+│   ├── agent_graph.py     # LangGraph graf yapısı ve orkestratörü
+│   ├── query_service.py   # Toplu sorgu ve canlı akış (streaming) servisi
 │   ├── tools.py           # İsteğe bağlı harici araç tanımları
 │   └── main.py            # FastAPI sunucusu, yönetim ve REST API uç noktaları
 ├── download_model.py      # Modelleri doğrudan models/ içine indiren betik
