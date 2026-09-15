@@ -6,11 +6,20 @@ import torch
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional, List
 from pydantic import BaseModel
 from src.rag.document_loader import DocumentLoader
 from src.rag.rag_engine import RAGEngine
 from src.agent.agent_graph import EnterpriseRAGAgent
-from src.core.config import DOCS_PATH, EMBEDDING_MODEL_NAME, LLM_MODEL_NAME
+from src.connectors.db_connector import DatabaseConnector, create_sample_sqlite_db
+from src.connectors.db_loader import DatabaseTableLoader
+from src.core.config import (
+    DOCS_PATH,
+    EMBEDDING_MODEL_NAME,
+    LLM_MODEL_NAME,
+    DATABASE_URL,
+    SAMPLE_DB_PATH,
+)
 
 app = FastAPI(
     title="Enterprise Local RAG API",
@@ -31,6 +40,16 @@ app.add_middleware(
 rag_engine = RAGEngine()
 agent = EnterpriseRAGAgent(rag_engine)
 document_loader = DocumentLoader(DOCS_PATH)
+
+# Veritabanı bağlayıcısını başlat (eğer URL yoksa test için sample_enterprise.db hazırla)
+if not DATABASE_URL and not os.path.exists(SAMPLE_DB_PATH):
+    try:
+        create_sample_sqlite_db(SAMPLE_DB_PATH)
+    except Exception as e:
+        print(f"[Sample DB] Örnek veritabanı oluşturulamadı: {e}")
+
+db_connector = DatabaseConnector()
+db_loader = DatabaseTableLoader(db_connector)
 
 
 def auto_index_on_startup():
@@ -75,12 +94,24 @@ class QueryRequest(BaseModel):
     question: str
 
 
+class SyncTableRequest(BaseModel):
+    table_name: str
+    text_columns: Optional[List[str]] = None
+    title_column: Optional[str] = None
+    id_column: Optional[str] = None
+
+
+class TestQueryRequest(BaseModel):
+    query: str
+
+
 @app.get("/api/v1/stats", summary="Sistem ve Vektör Veritabanı İstatistikleri")
 def get_system_stats():
     """Sistem donanımı, aktif modeller ve indeks istatistiklerini döner."""
     db_stats = rag_engine.get_stats()
     device = "CUDA (NVIDIA GPU)" if torch.cuda.is_available() else "CPU"
-    
+    db_conn_info = db_connector.test_connection()
+
     return {
         "status": "success",
         "device": device,
@@ -88,7 +119,8 @@ def get_system_stats():
         "llm_model": LLM_MODEL_NAME,
         "total_chunks": db_stats["total_chunks"],
         "total_documents": db_stats["total_documents"],
-        "documents": db_stats["document_chunks"]
+        "documents": db_stats["document_chunks"],
+        "database": db_conn_info
     }
 
 
@@ -200,6 +232,59 @@ def query_rag_stream(request: QueryRequest):
         return StreamingResponse(event_generator(), media_type="application/x-ndjson")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/database/status", summary="Veritabanı Bağlantı Durumu ve Şeması")
+def get_database_status():
+    """Veritabanı bağlantı durumunu, türünü ve erişilebilir tabloları döner."""
+    conn_info = db_connector.test_connection()
+    schema_summary = db_connector.get_schema_summary() if db_connector.is_connected else ""
+    return {
+        "status": "success",
+        "connection": conn_info,
+        "schema_summary": schema_summary
+    }
+
+
+@app.post("/api/v1/database/test-query", summary="Güvenli Salt-Okunur SQL Çalıştır")
+def run_database_query(req: TestQueryRequest):
+    """Yalnızca SELECT sorguları çalıştırır, güvenlik kurallarına uymayanları engeller."""
+    result = db_connector.execute_query(req.query)
+    if result.get("status") == "error":
+        raise HTTPException(status_code=400, detail=result.get("message"))
+    return {"status": "success", "data": result}
+
+
+@app.post("/api/v1/database/sync-table", summary="Veritabanı Tablosunu Vektör İndeksine Aktar")
+def sync_database_table(req: SyncTableRequest):
+    """Belirtilen tablodaki satırları metin parçalarına dönüştürüp ChromaDB'ye indeksler."""
+    if not db_connector.is_connected:
+        raise HTTPException(status_code=400, detail="Veritabanı bağlantısı aktif değil.")
+
+    chunks, ids, metadatas = db_loader.load_table_as_chunks(
+        table_name=req.table_name,
+        text_columns=req.text_columns,
+        title_column=req.title_column,
+        id_column=req.id_column
+    )
+
+    if not chunks:
+        return {
+            "status": "warning",
+            "message": f"'{req.table_name}' tablosunda aktarılacak satır bulunamadı.",
+            "chunk_count": 0
+        }
+
+    # Eski tablo kayıtlarını temizle ve yenilerini ekle
+    rag_engine.delete_document(f"db_{req.table_name}")
+    rag_engine.add_documents(chunks, ids, metadatas)
+
+    return {
+        "status": "success",
+        "message": f"'{req.table_name}' tablosundaki {len(chunks)} kayıt başarıyla vektörleştirildi.",
+        "table_name": req.table_name,
+        "chunk_count": len(chunks)
+    }
 
 
 if __name__ == "__main__":

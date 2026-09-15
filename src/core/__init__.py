@@ -13,6 +13,10 @@ from src.core.config import (
     ALL_LOCAL_MODELS_EXIST,
     USE_4BIT_QUANTIZATION,
     RAG_DEVICE,
+    DATABASE_URL,
+    DB_ALLOWED_TABLES,
+    DB_MAX_ROWS,
+    SAMPLE_DB_PATH,
 )
 
 __all__ = [
@@ -30,4 +34,8 @@ __all__ = [
     "ALL_LOCAL_MODELS_EXIST",
     "USE_4BIT_QUANTIZATION",
     "RAG_DEVICE",
+    "DATABASE_URL",
+    "DB_ALLOWED_TABLES",
+    "DB_MAX_ROWS",
+    "SAMPLE_DB_PATH",
 ]

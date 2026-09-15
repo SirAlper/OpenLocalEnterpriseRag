@@ -37,3 +37,17 @@ USE_4BIT_QUANTIZATION = False
 # LLM tek başına GPU VRAM'e (~3 GB) tam sığsın ve VRAM aşımıyla Windows sanal bellek (pagefile) patlamasın diye
 # Embedding ve Reranker sorgulamaları hafif olduğundan CPU üzerinde çalıştırılır.
 RAG_DEVICE = os.getenv("RAG_DEVICE", "cpu")
+
+# ──────────────────────────── VERİTABANI BAĞLANTISI (OPSİYONEL) ────────────────────────────
+# Örnek bağlantılar:
+# - PostgreSQL: "postgresql+psycopg2://user:pass@localhost:5432/sirket_db"
+# - MSSQL: "mssql+pyodbc://user:pass@host:1433/db?driver=ODBC+Driver+17+for+SQL+Server"
+# - MySQL: "mysql+pymysql://user:pass@localhost:3306/db"
+# - SQLite: "sqlite:///./data/sample_enterprise.db"
+# Boş bırakılırsa veritabanı desteği devre dışı kalır ve sistem yalnızca dosya RAG ile çalışır.
+SAMPLE_DB_PATH = os.path.join(DOCS_PATH, "sample_enterprise.db")
+DEFAULT_SQLITE_URL = f"sqlite:///{SAMPLE_DB_PATH}"
+
+DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_SQLITE_URL if os.path.exists(SAMPLE_DB_PATH) else "")
+DB_ALLOWED_TABLES = [t.strip() for t in os.getenv("DB_ALLOWED_TABLES", "").split(",") if t.strip()]
+DB_MAX_ROWS = int(os.getenv("DB_MAX_ROWS", "50"))

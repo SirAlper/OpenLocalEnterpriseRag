@@ -81,6 +81,24 @@ def delete_document_api(filename):
         return False, str(e)
 
 
+def fetch_database_status():
+    try:
+        res = requests.get(f"{API_BASE_URL}/api/v1/database/status", timeout=5)
+        if res.status_code == 200:
+            return res.json()
+    except Exception:
+        return None
+    return None
+
+
+def sync_table_api(table_name):
+    try:
+        res = requests.post(f"{API_BASE_URL}/api/v1/database/sync-table", json={"table_name": table_name}, timeout=60)
+        return res.status_code == 200, res.json().get("message", "İşlem tamamlandı.")
+    except Exception as e:
+        return False, str(e)
+
+
 def query_rag_api(question):
     try:
         res = requests.post(
@@ -188,6 +206,37 @@ with st.sidebar:
             st.write("---")
     else:
         st.caption("Henüz yüklenmiş bir belge bulunmuyor.")
+
+    st.divider()
+
+    # 4. Veritabanı Yönetimi (SQLAlchemy Evrensel Bağlayıcı)
+    st.subheader("🗄️ Veritabanı")
+    db_data = fetch_database_status()
+    if db_data and db_data.get("connection", {}).get("status") == "connected":
+        conn = db_data["connection"]
+        dialect = conn.get("dialect", "").upper()
+        tables = conn.get("tables", [])
+        st.success(f"🟢 **{dialect}** Bağlantısı Aktif")
+        st.caption(f"Erişilebilir Tablolar: {len(tables)} adet")
+
+        if tables:
+            selected_table = st.selectbox("Vektörleştirilecek Tablo", tables)
+            if st.button("🔄 Tabloyu Vektörleştir", key="sync_table_btn", use_container_width=True):
+                with st.spinner(f"'{selected_table}' tablosu vektörleştiriliyor..."):
+                    success, msg = sync_table_api(selected_table)
+                    if success:
+                        st.toast(msg, icon="✅")
+                        st.rerun()
+                    else:
+                        st.error(msg)
+
+            with st.expander("🔍 Tablo Şemasını İncele"):
+                st.code(db_data.get("schema_summary", "Şema bulunamadı."), language="text")
+    elif db_data and db_data.get("connection", {}).get("status") == "not_configured":
+        st.caption("⚪ Veritabanı Yapılandırılmadı")
+        st.info("İsteğe bağlı: `.env` dosyasında `DATABASE_URL` tanımlayarak PostgreSQL, MSSQL, MySQL veya SQLite bağlayabilirsiniz.")
+    else:
+        st.caption("⚪ Veritabanı Çevrimdışı")
 
     st.divider()
     if st.button("🧹 Sohbeti Temizle", use_container_width=True):

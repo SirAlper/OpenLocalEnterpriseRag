@@ -1,8 +1,10 @@
 import ast
 import operator
 import re
+import json
 from langchain_core.tools import tool
 from langchain_core.utils.function_calling import convert_to_openai_tool
+from src.connectors.db_connector import DatabaseConnector
 
 # Desteklenen güvenli matematiksel operatörler
 _OPERATORS = {
@@ -69,6 +71,36 @@ def calc(expression: str) -> str:
     return safe_math_eval(expression)
 
 
-all_tools = [calc]
+# ──────────────────────────── VERİTABANI ARAÇLARI ────────────────────────────
+
+db_connector = DatabaseConnector()
+
+
+@tool("sql_db_schema", description="Şirket veritabanındaki erişilebilir tabloları ve kolonları listeler. Hangi tablonun veya kolonun mevcut olduğunu kontrol etmek için kullanın.")
+def sql_db_schema(dummy: str = "") -> str:
+    """Return the schema summary of the database."""
+    if not db_connector.is_connected:
+        return "Bilgi: Veritabanı bağlantısı yapılandırılmamış veya aktif değil."
+    return db_connector.get_schema_summary()
+
+
+@tool("sql_db_query", description="Veritabanında salt-okunur (read-only) SQL SELECT sorgusu çalıştırır. Satış, ürün, stok, sipariş ve sayısal verileri sorgulamak için kullanın.")
+def sql_db_query(query: str) -> str:
+    """Execute a safe, read-only SQL query against the database."""
+    if not db_connector.is_connected:
+        return "Hata: Veritabanı bağlantısı aktif değil."
+
+    res = db_connector.execute_query(query)
+    if res["status"] != "success":
+        return f"Hata: {res.get('message', 'Sorgu başarısız.')}"
+
+    rows = res.get("rows", [])
+    if not rows:
+        return "Sorgu başarıyla çalıştı ancak eşleşen sonuç bulunamadı."
+
+    return json.dumps(rows, ensure_ascii=False, indent=2)
+
+
+all_tools = [calc, sql_db_schema, sql_db_query]
 tool_schema = [convert_to_openai_tool(t) for t in all_tools]
 tools_by_name = {t.name: t for t in all_tools}
