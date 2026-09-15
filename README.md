@@ -245,7 +245,6 @@ curl -X POST "http://localhost:8000/api/v1/query-stream" \
 - [ ] **Zengin Format & Tablo Desteği:** Excel (`.xlsx`), CSV ve tablolardan oluşan kurumsal veriler için yapısal veri ayrıştırma (parsing/chunking).
 
 ### 🤖 LangGraph & Ajan Mimarisi (Agentic RAG)
-- [x] **Akıllı Selamlama & Halüsinasyon Kalkanı:** Selamlaşma ile kurumsal sorguları ayırt eden, belgede bulunmayan kavramlarda uydurma tanımları ve sonsuz tekrarı (*repetition collapse*) engelleyen koruma mantığı.
 - [x] **Halüsinasyon Denetleyici & Özyansıma (Hallucination Grader / Self-RAG):** Üretilen cevabın verilen bağlama sadakatini denetleyen ve gerekirse güvenli fallback düğümüne yönlendiren koşullu kontrol döngüsü.
 - [x] **LangGraph & Streaming Tam Senkronizasyonu:** Canlı token akışını graf düğümlerini atlamadan, adım adım durum (`status`), kaynak (`sources`) ve doğrulama (`grade`) olaylarıyla senkronize ileten altyapı.
 - [ ] **Sohbet Geçmişi & Bellek (Multi-Turn Chat History):** LangGraph Memory / Checkpointer entegrasyonu ile oturum bazlı bağlam takibi.
