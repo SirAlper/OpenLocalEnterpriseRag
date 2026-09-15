@@ -23,8 +23,12 @@
   - LangGraph Memory / SqliteSaver entegrasyonu ile kullanıcı oturumlarını ve önceki konuşma bağlamını hatırlama.
 - [ ] **Dinamik Sorgu Yeniden Yazma (Query Rewriter & Expansion):**
   - Kullanıcının eksik veya muğlak sorularını vektör aramasına en uygun formata çeviren akıllı ajan düğümü.
-- [ ] **Yönlendirici & Çoklu Ajan Orkestrasyonu (Router & Multi-Agent Teams):**
-  - Soruları şirket dokümanı, ilişkisel veritabanı sorgusu (Text-to-SQL) veya yerel araçlara dinamik yönlendiren süpervizör ajan mimarisi.
+- [x] **İlişkisel Veritabanı ve Text-to-SQL Entegrasyonu (SQL Database Connector & Tools):**
+  - SQLAlchemy tabanlı evrensel konnektör (`src/connectors/db_connector.py`) ile PostgreSQL, MSSQL, MySQL, Oracle ve SQLite desteği tamamlandı.
+  - Sıkı salt-okunur (strict read-only) güvenlik filtreleri, otomatik `LIMIT` ve tablo beyaz listesi (`DB_ALLOWED_TABLES`) eklendi.
+  - Tablo kayıtlarını ChromaDB formatına çeviren ETL motoru (`DatabaseTableLoader`) ve ajan araçları (`sql_db_query`, `sql_db_schema`) entegre edildi.
+- [ ] **Yönlendirici & Çoklu Ajan Takımları (Router & Multi-Agent Teams):**
+  - Soruları şirket dokümanı, ilişkisel veritabanı sorgusu veya hesaplama araçları arasında dinamik paylaştıran süpervizör (supervisor) ajan mimarisi.
 - [ ] **Kullanıcı Geri Bildirim Döngüsü (Feedback Loop):**
   - Web arayüzü üzerinden yanıtları beğenme/beğenmeme (Thumbs up/down) metriklerini toplayarak retrieval doğruluğunu sürekli izleme.
 
