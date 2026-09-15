@@ -2,7 +2,7 @@ import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, pipeline
 from langchain_huggingface import ChatHuggingFace, HuggingFacePipeline
-from src.config import LLM_MODEL_NAME, USE_4BIT_QUANTIZATION
+from src.core.config import LLM_MODEL_NAME, USE_4BIT_QUANTIZATION
 
 
 def create_chat_model() -> ChatHuggingFace:

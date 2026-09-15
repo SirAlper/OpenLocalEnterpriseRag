@@ -104,17 +104,26 @@ local-enterprise-rag/
 ├── ui/
 │   └── app.py             # Streamlit tabanlı modern kullanıcı ve yönetim arayüzü
 ├── src/
-│   ├── __init__.py
-│   ├── config.py          # Sistem, dosya yolları ve model yapılandırması
-│   ├── llm.py             # ChatHuggingFace model yükleyici ve pipeline
-│   ├── prompts.py         # RAG ve halüsinasyon denetim promptları
-│   ├── document_loader.py # PDF/DOCX/TXT okuyucu ve artımlı metin parçalayıcı
-│   ├── rag_engine.py      # Embedding, ChromaDB, CrossEncoder reranker motoru
-│   ├── nodes.py           # LangGraph düğüm fonksiyonları (retrieve, generate, grade)
-│   ├── agent_graph.py     # LangGraph graf yapısı ve orkestratörü
-│   ├── query_service.py   # Toplu sorgu ve canlı akış (streaming) servisi
-│   ├── tools.py           # İsteğe bağlı harici araç tanımları
-│   └── main.py            # FastAPI sunucusu, yönetim ve REST API uç noktaları
+│   ├── __init__.py            # Paket dışa aktarımları ve modül köprüleri
+│   ├── core/                  # Çekirdek yapılandırma katmanı
+│   │   ├── __init__.py
+│   │   └── config.py          # Sistem, dosya yolları ve model yapılandırması
+│   ├── rag/                   # Vektör veri tabanı ve arama katmanı
+│   │   ├── __init__.py
+│   │   ├── document_loader.py # PDF/DOCX/TXT okuyucu ve bağlamsal parçalayıcı
+│   │   └── rag_engine.py      # BGE-M3 embedding, ChromaDB ve CrossEncoder reranker
+│   ├── agent/                 # LangGraph tabanlı RAG karar & üretim ajanı
+│   │   ├── __init__.py
+│   │   ├── llm.py             # ChatHuggingFace model yükleyici ve pipeline
+│   │   ├── prompts.py         # RAG ve halüsinasyon denetim promptları
+│   │   ├── nodes.py           # LangGraph düğüm fonksiyonları (retrieve, generate, grade)
+│   │   ├── agent_graph.py     # LangGraph graf yapısı ve orkestratörü
+│   │   ├── query_service.py   # Toplu sorgu ve canlı akış (streaming) servisi
+│   │   └── tools.py           # İsteğe bağlı harici araç tanımları
+│   ├── api/                   # REST API sunucu katmanı
+│   │   ├── __init__.py
+│   │   └── main.py            # FastAPI sunucusu, yönetim ve REST API uç noktaları
+│   └── main.py                # Geriye dönük uyumlu giriş noktası (uvicorn src.main:app)
 ├── download_model.py      # Modelleri doğrudan models/ içine indiren betik
 ├── requirements.txt       # Proje bağımlılıkları listesi
 ├── .gitignore             # Vektör veri tabanını ve modelleri hariç tutma kuralları

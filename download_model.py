@@ -6,7 +6,7 @@ os.environ["HF_HUB_OFFLINE"] = "0"
 os.environ["TRANSFORMERS_OFFLINE"] = "0"
 
 from huggingface_hub import snapshot_download
-from src.config import MODELS_DIR, LOCAL_LLM_PATH, LOCAL_EMBEDDING_PATH, LOCAL_RERANKER_PATH
+from src.core.config import MODELS_DIR, LOCAL_LLM_PATH, LOCAL_EMBEDDING_PATH, LOCAL_RERANKER_PATH
 
 os.makedirs(MODELS_DIR, exist_ok=True)
 
@@ -28,13 +28,14 @@ models = [
     }
 ]
 
-for item in models:
-    print(f"\nHazırlanıyor / İndiriliyor: {item['name']} -> {item['local_dir']}...")
-    snapshot_download(
-        repo_id=item["repo_id"],
-        local_dir=item["local_dir"],
-        resume_download=True,
-        ignore_patterns=["*.onnx", "*.onnx_data", "onnx/*", "imgs/*", "*.jpg", "*.png"]
-    )
+if __name__ == "__main__":
+    for item in models:
+        print(f"\nHazırlanıyor / İndiriliyor: {item['name']} -> {item['local_dir']}...")
+        snapshot_download(
+            repo_id=item["repo_id"],
+            local_dir=item["local_dir"],
+            resume_download=True,
+            ignore_patterns=["*.onnx", "*.onnx_data", "onnx/*", "imgs/*", "*.jpg", "*.png"]
+        )
 
-print("\n Modeller başarıyla doğrudan './models' klasörüne sabitlendi! Artık temp/cache şişmesi olmadan çalışabilirsin.")
+    print("\n Modeller başarıyla doğrudan './models' klasörüne sabitlendi! Artık temp/cache şişmesi olmadan çalışabilirsin.")

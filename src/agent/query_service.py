@@ -1,7 +1,7 @@
 from typing import Generator
 from langchain_huggingface import ChatHuggingFace
-from src.nodes import AgentNodes
-from src.prompts import build_rag_messages, NO_CONTEXT_RESPONSE
+from src.agent.nodes import AgentNodes
+from src.agent.prompts import build_rag_messages, NO_CONTEXT_RESPONSE
 
 
 class QueryService:

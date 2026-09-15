@@ -1,7 +1,7 @@
 from typing import Literal
 from langchain_huggingface import ChatHuggingFace
-from src.rag_engine import RAGEngine
-from src.prompts import (
+from src.rag.rag_engine import RAGEngine
+from src.agent.prompts import (
     build_rag_messages, build_grader_messages,
     NO_CONTEXT_RESPONSE, FALLBACK_RESPONSE
 )
