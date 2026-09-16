@@ -2,7 +2,7 @@ from typing import Literal
 from langchain_huggingface import ChatHuggingFace
 from src.rag.rag_engine import RAGEngine
 from src.agent.prompts import (
-    build_rag_messages, build_grader_messages,
+    build_rag_messages, build_grader_messages, build_refine_messages,
     NO_CONTEXT_RESPONSE, FALLBACK_RESPONSE
 )
 
@@ -53,6 +53,27 @@ class AgentNodes:
         print(f"Hallucination denetim sonucu: {grade}")
         return {"hallucination_grade": grade}
 
+    def refine(self, state: dict) -> dict:
+        """Halüsinasyon tespit edilen veya şüpheli yanıtı bağlama göre budar ve yeniden düzenler."""
+        print("[LangGraph Node: refine] Yanıt bağlama sadık kalınarak yeniden düşünülüyor ve düzeltiliyor...")
+        context = state.get("context", "").strip()
+        question = state.get("question", "").strip()
+        draft_answer = state.get("answer", "").strip()
+
+        if not context:
+            return {"answer": NO_CONTEXT_RESPONSE, "is_refined": False}
+
+        messages = build_refine_messages(context, question, draft_answer)
+        response = self.chat_model.invoke(messages)
+        refined_answer = response.content.strip()
+        print("[LangGraph Node: refine] Yanıt başarıyla revize edildi.")
+
+        return {
+            "answer": refined_answer,
+            "retry_count": state.get("retry_count", 0) + 1,
+            "is_refined": True
+        }
+
     def fallback(self, state: dict) -> dict:
         """Halüsinasyon tespit edildiğinde güvenli yanıt döner."""
         print("[LangGraph Node: fallback] Güvenli fallback devreye girdi!")
@@ -61,6 +82,17 @@ class AgentNodes:
     # ──────────────────────────── KARAR FONKSİYONLARI ────────────────────────────
 
     @staticmethod
-    def decide_hallucinate(state: dict) -> Literal["end", "fallback"]:
+    def decide_hallucinate(state: dict) -> Literal["end", "refine", "fallback"]:
         grade = str(state.get("hallucination_grade", "")).strip().lower()
-        return "end" if ("evet" in grade or "yes" in grade) else "fallback"
+        is_passed = "evet" in grade or "yes" in grade
+        if is_passed:
+            return "end"
+
+        # Eğer daha önce düzeltilmediyse (retry_count < 1) refine düğümüne yönlendir
+        if state.get("retry_count", 0) < 1:
+            print("[LangGraph Decision] Hallucination şüphesi: Yanıt refine (düzeltme) düğümüne aktarılıyor.")
+            return "refine"
+
+        print("[LangGraph Decision] Maksimum deneme aşıldı: Fallback düğümüne aktarılıyor.")
+        return "fallback"
+

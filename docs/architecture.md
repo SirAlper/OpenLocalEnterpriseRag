@@ -9,7 +9,7 @@
 ```text
 +-------------------------------------------------------------------------+
 |                              FastAPI Gateway                            |
-|        (POST /api/v1/documents  |  POST /api/v1/query-stream)           |
+|        (POST /api/v1/documents  |  POST /api/v1/query)                  |
 +------------------------------------+------------------------------------+
                                      |
                                      v
@@ -25,12 +25,26 @@
 |             |                          |   Hallucination Grader |       |
 |             |                          +-----------+------------+       |
 |             |                                      |                    |
-|             |                        [is_grounded] / \ [hallucinated]   |
-|             |                                     v   v                 |
-|             |                                   [END] [Fallback Node]   |
-|             |                                               |           |
-|             |                                               v           |
-|             |                                             [END]         |
+|             |              +-----------------------+------------------+ |
+|             |              | [Doğrulandı]          | [Şüpheli & Retry]| |
+|             |              v                       v                  | |
+|             |            [END]             +-------------------+      | |
+|             |                              |    Refine Node    |      | |
+|             |                              | (Self-Correction) |      | |
+|             |                              +---------+---------+      | |
+|             |                                        |                | |
+|             |                                        v                | |
+|             |                                      [END]              | |
+|             |              | [Limit Aşıldı]                           | |
+|             |              +------------------------------------------+ |
+|             |                                      |                    |
+|             |                                      v                    |
+|             |                              +---------------+            |
+|             |                              | Fallback Node |            |
+|             |                              +-------+-------+            |
+|             |                                      |                    |
+|             |                                      v                    |
+|             |                                    [END]                  |
 +-------------|-----------------------------------------------------------+
               |
               v
@@ -74,17 +88,25 @@ Standart metin parçalayıcılar (text splitters), metni belirli karakter veya t
 
 ---
 
-## 🤖 LangGraph Durum Grafı ve Halüsinasyon Denetimi (Self-RAG)
+## 🤖 LangGraph Durum Grafı ve Öz-Düzeltmeli Denetim (Self-RAG & Refinement)
 
-İş akışı tek yönlü bir boru hattı değil, durum kontrollü bir LangGraph grafiğidir (`src/agent/agent_graph.py`):
+İş akışı tek yönlü doğrusal bir boru hattı değil, geri beslemeli ve durum kontrollü bir LangGraph grafiğidir (`src/agent/agent_graph.py`):
 
 1. **`retrieve` Düğümü:**
    - ChromaDB + Reranker motorunu çalıştırır.
    - Eğer eşleşen hiçbir kurumsal belge bulunamazsa doğrudan *"Bu bilgi şirket belgelerinde bulunmamaktadır"* yanıtına yönlendirir.
 2. **`generate` Düğümü:**
-   - `Qwen2.5-1.5B-Instruct` modeli devreye girerek belgelere birebir sadık kalarak yanıt üretir.
+   - `Qwen2.5-1.5B-Instruct` modeli devreye girerek belgelere sadık kalarak yanıt üretir.
 3. **`grade` Düğümü (Hallucination Grader):**
-   - Üretilen yanıt ile sağlanan bağlamı karşılaştırır: *"Cevaptaki tüm iddialar bağlam tarafından doğrulanıyor mu?"*
+   - Üretilen yanıt ile bağlamı karşılaştırır. Paraphrase (farklı sözcüklerle ifade etme) veya özetleme halüsinasyon sayılmaz; doğrudan belgede olmayan çelişkili veya uydurma iddialar tespit edilir.
 4. **Koşullu Karar (`decide_hallucinate`):**
-   - **Doğrulandı (Evet):** Akış başarıyla sonlandırılır (`END`), kaynaklar ve cevap kullanıcıya sunulur.
-   - **Doğrulanamadı (Hayır / Uydurma):** Güvenli `fallback` düğümü devreye girer ve kullanıcıya doğrulanmamış bilgi verilmesi engellenir.
+   - **Doğrulandı (Evet):** Akış başarıyla sonlandırılır (`END`), kaynaklar ve doğrulanmış cevap kullanıcıya sunulur.
+   - **Şüpheli / Doğrulanamadı (Hayır):**
+     - Eğer yanıt daha önce düzeltilmediyse (`retry_count < 1`), doğrudan `fallback`'e düşmek yerine **`refine`** düğümüne yönlendirilir.
+     - Deneme limiti aşıldıysa son çare olarak güvenli `fallback` düğümü devreye girer.
+5. **`refine` Düğümü (Self-Correction & Budama):**
+   - Uzun yanıtlarda doğru bilgilerin gereksiz yere silinmesini önler.
+   - Taslak yanıttaki belgesiz/spekülatif cümleleri çıkarıp budar, yalnızca bağlam tarafından kesin doğrulanan bilgileri koruyarak yanıtı profesyonelce yeniden yapılandırır.
+6. **Kullanıcı Deneyimi:**
+   - Token bazlı parçalı akış yerine, model arka planda düşünüp doğrulama yaparken arayüzde *"💭 Düşünülüyor ve belgeler inceleniyor..."* durumu gösterilir. İş akışı tamamlandığında nihai ve doğrulanmış yanıt eksiksiz bir mesaj olarak ekrana basılır.
+

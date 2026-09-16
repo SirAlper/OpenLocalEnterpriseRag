@@ -206,24 +206,26 @@ async def upload_file(file: UploadFile = File(...)):
 
 @app.post("/api/v1/query", summary="Yapay Zekaya Soru Sor")
 def query_rag(request: QueryRequest):
-    """RAG Ajanı üzerinden soruya cevap ve referans kaynakları döner."""
+    """RAG Ajanı üzerinden soruya cevap, referans kaynakları ve denetim sonucunu döner."""
     try:
         print(f"Kullanıcı sorusu: {request.question}")
         result = agent.query(request.question)
         return {
             "status": "success",
             "answer": result["answer"],
-            "sources": result["sources"]
+            "sources": result["sources"],
+            "hallucination_grade": result.get("hallucination_grade", ""),
+            "is_refined": result.get("is_refined", False)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/v1/query-stream", summary="Yapay Zekaya Soru Sor (Canlı Akış / Streaming)")
+@app.post("/api/v1/query-stream", summary="Yapay Zekaya Soru Sor (Durum Akışı / Event Stream)")
 def query_rag_stream(request: QueryRequest):
-    """RAG Ajanı üzerinden kaynakları ve üretilen token'ları anlık akış (ndjson) olarak iletir."""
+    """RAG Ajanı üzerinden aşama durumlarını ve nihai yanıtı anlık akış (ndjson) olarak iletir."""
     try:
-        print(f"Canlı akış kullanıcı sorusu: {request.question}")
+        print(f"Durum akışı kullanıcı sorusu: {request.question}")
 
         def event_generator():
             for event in agent.stream_events(request.question):
@@ -232,6 +234,7 @@ def query_rag_stream(request: QueryRequest):
         return StreamingResponse(event_generator(), media_type="application/x-ndjson")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.get("/api/v1/database/status", summary="Veritabanı Bağlantı Durumu ve Şeması")

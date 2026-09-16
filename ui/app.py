@@ -265,13 +265,13 @@ st.markdown('<div class="sub-header">Tamamen yerel donanımda çalışan, veri s
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
-        
-        # Durdurulma veya Doğruluk denetimi rozeti
-        if msg.get("stopped") is True:
-            st.caption("⏹️ *Yanıt kullanıcı tarafından durduruldu.*")
-        elif msg.get("verified") is True:
-            st.caption("🛡️ *LangGraph Denetimi: Şirket belgeleriyle doğrulandı.*")
-        elif msg.get("verified") is False:
+
+        # Doğruluk ve Düzeltme denetimi rozeti
+        if msg.get("is_refined") is True:
+            st.caption("✍️ *LangGraph Denetimi: Yanıt şirket belgelerine göre yeniden değerlendirilip sadeleştirildi.*")
+        elif msg.get("verified") is True and msg.get("sources"):
+            st.caption("🛡️ *LangGraph Denetimi: Şirket belgeleriyle birebir doğrulandı.*")
+        elif msg.get("verified") is False and msg.get("sources"):
             st.caption("⚠️ *LangGraph Denetimi: Belgelerle tam doğrulanamadı.*")
 
         # Referans alınan kaynaklar varsa expander içinde göster
@@ -285,62 +285,32 @@ for msg in st.session_state.messages:
 
 # Yeni Kullanıcı Sorusu
 if prompt := st.chat_input("Şirket belgeleriniz hakkında bir soru sorun (ör. 'Yıllık izin politikamız nedir?')..."):
-    # Kullanıcı mesajını ekle
+    # Kullanıcı mesajını ekle ve ekrana bas
     st.session_state.messages.append({"role": "user", "content": prompt, "sources": []})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Modelden yanıt al (Canlı Streaming)
+    # Modelden yanıt al (Düşünme/Yazıyor İkonu ile Toplu Yanıt)
     with st.chat_message("assistant"):
-        stop_col, _ = st.columns([2, 5])
-        with stop_col:
-            stop_placeholder = st.empty()
-            stop_placeholder.button("⏹️ Yanıtı Durdur", key=f"stop_{len(st.session_state.messages)}", help="Yanıt üretimini anında sonlandırır.")
+        with st.spinner("💭 Yanıt hazırlanıyor ve şirket belgeleri inceleniyor..."):
+            res = query_rag_api(prompt)
 
-        sources = []
-        full_answer = []
-        audit_state = {"verified": None, "warning_msg": None}
+        answer = res.get("answer", "Yanıt alınamadı.")
+        sources = res.get("sources", [])
+        is_refined = res.get("is_refined", False)
+        grade = str(res.get("hallucination_grade", "")).strip().lower()
+        is_verified = ("evet" in grade or "yes" in grade) or is_refined
 
-        # Asistan mesajı taslağını önceden listeye ekle ki durdurma anında o ana kadar gelen metin korunsun
-        assistant_msg = {
-            "role": "assistant",
-            "content": "",
-            "sources": [],
-            "verified": None,
-            "stopped": False
-        }
-        st.session_state.messages.append(assistant_msg)
+        # Yanıtı tek seferde eksiksiz ekrana bas
+        st.markdown(answer)
 
-        def response_generator():
-            for event in stream_rag_api(prompt):
-                event_type = event.get("type")
-                if event_type == "sources":
-                    sources.extend(event.get("sources", []))
-                    assistant_msg["sources"] = sources
-                elif event_type == "token":
-                    token = event.get("token", "")
-                    full_answer.append(token)
-                    assistant_msg["content"] = "".join(full_answer)
-                    yield token
-                elif event_type == "grade":
-                    audit_state["verified"] = event.get("passed", True)
-                    assistant_msg["verified"] = audit_state["verified"]
-                elif event_type == "warning":
-                    audit_state["warning_msg"] = event.get("message", "")
-
-        try:
-            st.write_stream(response_generator())
-        except Exception:
-            assistant_msg["stopped"] = True
-
-        # Doğal tamamlanma durumunda durdurma butonunu ekrandan kaldır
-        stop_placeholder.empty()
-
-        # Uyarı veya Doğrulama rozeti
-        if audit_state["warning_msg"]:
-            st.warning(audit_state["warning_msg"])
-        elif audit_state["verified"] is True and sources:
-            st.caption("🛡️ *LangGraph Denetimi: Şirket belgeleriyle doğrulandı.*")
+        # Doğruluk veya Düzeltme rozeti
+        if is_refined:
+            st.caption("✍️ *LangGraph Denetimi: Yanıt şirket belgelerine göre yeniden değerlendirilip sadeleştirildi.*")
+        elif is_verified and sources:
+            st.caption("🛡️ *LangGraph Denetimi: Şirket belgeleriyle birebir doğrulandı.*")
+        elif not is_verified and sources:
+            st.caption("⚠️ *LangGraph Denetimi: Belgelerle tam doğrulanamadı.*")
 
         # Kaynakları göster
         if sources:
@@ -351,7 +321,12 @@ if prompt := st.chat_input("Şirket belgeleriniz hakkında bir soru sorun (ör. 
                     st.markdown(f"> *\"{src['content'].strip()}\"*")
                     st.write("")
 
-        # Mesajın nihai halini güncelle
-        assistant_msg["content"] = "".join(full_answer)
-        assistant_msg["sources"] = sources
-        assistant_msg["verified"] = audit_state["verified"]
+        # Mesajı oturum geçmişine kaydet
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": answer,
+            "sources": sources,
+            "verified": is_verified,
+            "is_refined": is_refined
+        })
+

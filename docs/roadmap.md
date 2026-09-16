@@ -23,6 +23,8 @@
   - LangGraph Memory / SqliteSaver entegrasyonu ile kullanıcı oturumlarını ve önceki konuşma bağlamını hatırlama.
 - [ ] **Dinamik Sorgu Yeniden Yazma (Query Rewriter & Expansion):**
   - Kullanıcının eksik veya muğlak sorularını vektör aramasına en uygun formata çeviren akıllı ajan düğümü.
+- [x] **Öz-Düzeltmeli ve Budamalı Halüsinasyon Kalkanı (Self-Correction & Refinement Loop):**
+  - Uzun yanıtlarda ikili (evet/hayır) fallback çıkmazını önleyen, taslak yanıttaki belgesiz iddiaları budayıp kanıtlı kısımları koruyan `refine` düğümü LangGraph grafına eklendi.
 - [x] **İlişkisel Veritabanı ve Text-to-SQL Entegrasyonu (SQL Database Connector & Tools):**
   - SQLAlchemy tabanlı evrensel konnektör (`src/connectors/db_connector.py`) ile PostgreSQL, MSSQL, MySQL, Oracle ve SQLite desteği tamamlandı.
   - Sıkı salt-okunur (strict read-only) güvenlik filtreleri, otomatik `LIMIT` ve tablo beyaz listesi (`DB_ALLOWED_TABLES`) eklendi.

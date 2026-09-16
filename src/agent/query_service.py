@@ -5,7 +5,7 @@ from src.agent.prompts import build_rag_messages, NO_CONTEXT_RESPONSE
 
 
 class QueryService:
-    """RAG Ajanı için toplu sorgu ve canlı akış (streaming) yöntemlerini yöneten servis."""
+    """RAG Ajanı için toplu sorgu ve durum bazlı akış yöntemlerini yöneten servis."""
 
     def __init__(self, app, nodes: AgentNodes, chat_model: ChatHuggingFace):
         self.app = app
@@ -13,22 +13,33 @@ class QueryService:
         self.chat_model = chat_model
 
     def query(self, question: str) -> dict:
-        """LangGraph iş akışını toplu (batch) olarak çalıştırır."""
+        """LangGraph iş akışını çalıştırarak nihai yanıtı, kaynakları ve denetim sonucunu döner."""
         result = self.app.invoke({
-            "question": question, "context": "",
-            "sources": [], "answer": "", "hallucination_grade": ""
+            "question": question,
+            "context": "",
+            "sources": [],
+            "answer": "",
+            "hallucination_grade": "",
+            "retry_count": 0,
+            "is_refined": False
         })
         return {
             "answer": result.get("answer", ""),
             "sources": result.get("sources", []),
-            "hallucination_grade": result.get("hallucination_grade", "")
+            "hallucination_grade": result.get("hallucination_grade", ""),
+            "is_refined": result.get("is_refined", False)
         }
 
     def stream_events(self, question: str) -> Generator[dict, None, None]:
-        """LangGraph iş akışı ile tam senkronize canlı akış üretir."""
+        """LangGraph iş akışının durum adımlarını ve nihai yanıtı tek seferde döner."""
         state = {
-            "question": question, "context": "",
-            "sources": [], "answer": "", "hallucination_grade": ""
+            "question": question,
+            "context": "",
+            "sources": [],
+            "answer": "",
+            "hallucination_grade": "",
+            "retry_count": 0,
+            "is_refined": False
         }
 
         # 1. RETRIEVE
@@ -40,22 +51,13 @@ class QueryService:
 
         context = state["context"].strip()
         if not context:
-            for word in NO_CONTEXT_RESPONSE.split(" "):
-                yield {"type": "token", "token": word + " "}
-            yield {"type": "done", "answer": NO_CONTEXT_RESPONSE, "sources": []}
+            yield {"type": "done", "answer": NO_CONTEXT_RESPONSE, "sources": [], "is_refined": False}
             return
 
-        # 2. GENERATE (ChatHuggingFace Canlı Akış)
-        yield {"type": "status", "message": "✍️ Yanıt oluşturuluyor...", "node": "generate"}
-        messages = build_rag_messages(context, question)
-
-        generated_chunks = []
-        for chunk in self.chat_model.stream(messages):
-            if chunk.content:
-                generated_chunks.append(chunk.content)
-                yield {"type": "token", "token": chunk.content}
-
-        state["answer"] = "".join(generated_chunks).strip()
+        # 2. GENERATE
+        yield {"type": "status", "message": "✍️ Yanıt hazırlanıyor...", "node": "generate"}
+        generate_out = self.nodes.generate(state)
+        state["answer"] = generate_out["answer"]
 
         # 3. GRADE (Halüsinasyon Denetimi)
         yield {"type": "status", "message": "🛡️ Kaynak uyumu ve doğruluk denetleniyor...", "node": "grade"}
@@ -63,16 +65,31 @@ class QueryService:
         state["hallucination_grade"] = grade_out["hallucination_grade"]
 
         decision = self.nodes.decide_hallucinate(state)
-        if decision == "fallback":
+        if decision == "refine":
+            yield {"type": "status", "message": "✍️ Yanıt yeniden değerlendiriliyor ve belgelere göre sadeleştiriliyor...", "node": "refine"}
+            refine_out = self.nodes.refine(state)
+            state["answer"] = refine_out["answer"]
+            state["is_refined"] = True
+            state["retry_count"] = refine_out["retry_count"]
+            yield {"type": "grade", "grade": state["hallucination_grade"], "passed": True, "is_refined": True}
+        elif decision == "fallback":
             yield {"type": "warning", "message": "⚠️ Üretilen yanıt şirket belgeleriyle doğrulanamadı.", "node": "fallback"}
-            yield {"type": "grade", "grade": state["hallucination_grade"], "passed": False}
+            fallback_out = self.nodes.fallback(state)
+            state["answer"] = fallback_out["answer"]
+            yield {"type": "grade", "grade": state["hallucination_grade"], "passed": False, "is_refined": False}
         else:
-            yield {"type": "grade", "grade": state["hallucination_grade"], "passed": True}
+            yield {"type": "grade", "grade": state["hallucination_grade"], "passed": True, "is_refined": False}
 
-        yield {"type": "done", "answer": state["answer"], "sources": state["sources"]}
+        yield {
+            "type": "done",
+            "answer": state["answer"],
+            "sources": state["sources"],
+            "is_refined": state.get("is_refined", False)
+        }
 
     def stream_query(self, question: str) -> Generator[str, None, None]:
-        """Sadece metin token akışı üretir."""
+        """İş akışı tamamlandığında nihai yanıtı döner."""
         for event in self.stream_events(question):
-            if event["type"] == "token":
-                yield event["token"]
+            if event["type"] == "done":
+                yield event["answer"]
+

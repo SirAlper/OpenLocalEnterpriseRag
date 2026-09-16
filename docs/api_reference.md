@@ -14,8 +14,8 @@ Tüm uç noktaların etkileşimli Swagger dokümantasyonuna sunucu çalışırke
 | `GET` | `/api/v1/documents` | İndekslenmiş ve yüklü şirket belgelerini listeleme |
 | `POST` | `/api/v1/upload-file` | Yeni PDF, DOCX veya TXT belgesi yükleme ve indeksleme |
 | `DELETE` | `/api/v1/documents/{filename}` | Belgeyi diskten ve vektör veritabanından kalıcı silme |
-| `POST` | `/api/v1/query` | Toplu (Batch) soru-cevap ve kaynak alıntıları |
-| `POST` | `/api/v1/query-stream` | Canlı akış (NDJSON streaming) ile anlık yanıt alma |
+| `POST` | `/api/v1/query` | Toplu (Batch) soru-cevap, referans kaynaklar ve doğrulama sonucu |
+| `POST` | `/api/v1/query-stream` | Durum ve aşama adımları (NDJSON event stream) ile yanıt alma |
 | `GET` | `/api/v1/database/status` | Veritabanı bağlantı durumu, türü ve şema özeti |
 | `POST` | `/api/v1/database/test-query` | Güvenli salt-okunur SQL çalıştırma |
 | `POST` | `/api/v1/database/sync-table` | Veritabanı tablosunu ChromaDB vektör indeksine aktarma |
@@ -70,7 +70,7 @@ curl -X DELETE "http://localhost:8000/api/v1/documents/NovaTech_Guvenlik_Politik
 ---
 
 ### 4. Soru Sorma - Toplu Yanıt (`POST /api/v1/query`)
-İndekslenmiş kurumsal veriler üzerinden yanıt ve referans kaynak alıntılarını döner.
+İndekslenmiş kurumsal veriler üzerinden yanıt, referans kaynak alıntıları ve denetim sonucunu döner.
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/query" \
@@ -93,14 +93,16 @@ curl -X POST "http://localhost:8000/api/v1/query" \
       "distance": 0.421,
       "reranker_score": 4.812
     }
-  ]
+  ],
+  "hallucination_grade": "evet",
+  "is_refined": false
 }
 ```
 
 ---
 
-### 5. Canlı Akış ile Soru Sorma (`POST /api/v1/query-stream`)
-LangGraph iş akışıyla senkronize olarak çalışan **NDJSON (Newline Delimited JSON)** canlı akış protokolüdür.
+### 5. Durum Akışı ile Soru Sorma (`POST /api/v1/query-stream`)
+LangGraph iş akışıyla senkronize olarak aşama durumlarını ve nihai cevabı ileten **NDJSON (Newline Delimited JSON)** akış protokolüdür.
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/query-stream" \
@@ -113,9 +115,9 @@ curl -X POST "http://localhost:8000/api/v1/query-stream" \
 **Akış Boyunca Gelen Event Tipleri:**
 1. `{"type": "status", "message": "🔍 İlgili şirket belgeleri taranıyor...", "node": "retrieve"}`
 2. `{"type": "sources", "sources": [...]}`
-3. `{"type": "status", "message": "✍️ Yanıt oluşturuluyor...", "node": "generate"}`
-4. `{"type": "token", "token": "Donanım "}`
-5. `{"type": "token", "token": "arızalarında "}`
-6. `{"type": "status", "message": "🛡️ Kaynak uyumu ve doğruluk denetleniyor...", "node": "grade"}`
-7. `{"type": "grade", "grade": "evet", "passed": true}`
-8. `{"type": "done", "answer": "...", "sources": [...]}`
+3. `{"type": "status", "message": "✍️ Yanıt hazırlanıyor...", "node": "generate"}`
+4. `{"type": "status", "message": "🛡️ Kaynak uyumu ve doğruluk denetleniyor...", "node": "grade"}`
+5. *(Gerekirse)* `{"type": "status", "message": "✍️ Yanıt yeniden değerlendiriliyor ve belgelere göre sadeleştiriliyor...", "node": "refine"}`
+6. `{"type": "grade", "grade": "evet", "passed": true, "is_refined": false}`
+7. `{"type": "done", "answer": "...", "sources": [...], "is_refined": false}`
+

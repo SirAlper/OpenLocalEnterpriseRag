@@ -12,6 +12,8 @@ class AgentState(TypedDict):
     sources: list[dict]
     answer: str
     hallucination_grade: str
+    retry_count: int
+    is_refined: bool
 
 
 class EnterpriseRAGAgent:
@@ -31,15 +33,22 @@ class EnterpriseRAGAgent:
         workflow.add_node("retrieve", self.nodes.retrieve)
         workflow.add_node("generate", self.nodes.generate)
         workflow.add_node("grade", self.nodes.grade_hallucination)
+        workflow.add_node("refine", self.nodes.refine)
         workflow.add_node("fallback", self.nodes.fallback)
 
         workflow.set_entry_point("retrieve")
         workflow.add_edge("retrieve", "generate")
         workflow.add_edge("generate", "grade")
-        workflow.add_conditional_edges("grade", self.nodes.decide_hallucinate, {"end": END, "fallback": "fallback"})
+        workflow.add_conditional_edges(
+            "grade",
+            self.nodes.decide_hallucinate,
+            {"end": END, "refine": "refine", "fallback": "fallback"}
+        )
+        workflow.add_edge("refine", END)
         workflow.add_edge("fallback", END)
 
         return workflow.compile()
+
 
     # ──────────────────────────── SORGU SERVİSİ KÖPRÜLERİ ────────────────────────────
 

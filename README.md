@@ -15,10 +15,11 @@
 
 * 🔒 **%100 Yerel ve Çevrimdışı (Air-Gapped):** Tüm embedding, yeniden sıralama (reranking) ve LLM çıkarımları yerel GPU/CPU'da gerçekleşir. Sıfır veri sızıntısı ve sıfır API maliyeti.
 * 🎯 **İki Aşamalı Arama (Two-Stage Retrieval):** `BAAI/bge-m3` vektör araması ve `BAAI/bge-reranker-v2-m3` Cross-Encoder ile en alakalı şirket bağlamını milisaniyeler içinde tespit etme.
-* 🛡️ **LangGraph Halüsinasyon Kalkanı (Self-RAG):** Üretilen yanıtın şirket belgeleri tarafından doğrulanıp doğrulanmadığını denetleyen ve gerektiğinde güvenli `fallback` sağlayan ajan grafı.
+* 🛡️ **LangGraph Öz-Düzeltmeli Halüsinasyon Kalkanı (Self-Correction & Refinement):** Üretilen yanıtın şirket belgeleriyle sadakatini denetleyen, uzun yanıtlarda belgesiz kısımları budayarak düzelten ve gerektiğinde güvenli `fallback` sağlayan ajan grafı.
 * 🗄️ **Evrensel Veritabanı Bağlayıcı (Database-Agnostic):** SQLAlchemy tabanlı konnektör ile **PostgreSQL, MSSQL, MySQL, Oracle veya SQLite** üzerinden canlı Text-to-SQL ve tablo vektörleştirme.
-* ⚡ **Canlı Akış (Streaming via NDJSON):** LangGraph durum adımları (`status`), kaynak alıntıları (`sources`) ve token akışını gerçek zamanlı iletme.
+* ⚡ **Düşünme Durumu & Temiz İletişim (Thinking Indicator UX):** Model düşünürken ve belgeleri incelerken kullanıcıyı bilgilendiren, karmaşık token parçalanması yerine nihai onaylı yanıtı tek seferde sunan kararlı arayüz mimarisi.
 * 🖥️ **Modern Kullanıcı Arayüzü & REST API:** FastAPI Swagger dokümantasyonu ve Streamlit tabanlı modern yönetim paneli.
+
 
 ---
 
