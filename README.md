@@ -4,99 +4,100 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Agentic%20AI-blueviolet.svg)](https://langchain-ai.github.io/langgraph/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Privacy Protected](https://img.shields.io/badge/Privacy-100%25%20On--Premise-brightgreen.svg)](#)
 
-> **Kurumsal ölçekte hassas şirket verilerinin üçüncü taraf bulut sağlayıcılarına (OpenAI, Anthropic vb.) aktarılmasını engelleyen; tamamen yerel donanım (On-Premise / Özel Sunucu) üzerinde çalışan açık kaynaklı RAG ve Ajan (Agentic AI) platformu.**
+> **A privacy-first, on-premise generative AI and Agentic RAG platform engineered to run 100% locally on your infrastructure. Prevents enterprise data leakage to third-party cloud providers (OpenAI, Anthropic, etc.) with zero external API dependencies.**
 
 ---
 
-## ✨ Temel Yetenekler
+## ✨ Key Capabilities
 
-* 🔒 **%100 Yerel ve Çevrimdışı (Air-Gapped):** Tüm embedding, yeniden sıralama (reranking) ve LLM çıkarımları yerel GPU/CPU'da gerçekleşir. Sıfır veri sızıntısı ve sıfır API maliyeti.
-* 🎯 **İki Aşamalı Arama (Two-Stage Retrieval):** `BAAI/bge-m3` vektör araması ve `BAAI/bge-reranker-v2-m3` Cross-Encoder ile en alakalı şirket bağlamını milisaniyeler içinde tespit etme.
-* 🛡️ **LangGraph Öz-Düzeltmeli Halüsinasyon Kalkanı (Self-Correction & Refinement):** Üretilen yanıtın şirket belgeleriyle sadakatini denetleyen, uzun yanıtlarda belgesiz kısımları budayarak düzelten ve gerektiğinde güvenli `fallback` sağlayan ajan grafı.
-* 🗄️ **Evrensel Veritabanı Bağlayıcı (Database-Agnostic):** SQLAlchemy tabanlı konnektör ile **PostgreSQL, MSSQL, MySQL, Oracle veya SQLite** üzerinden canlı Text-to-SQL ve tablo vektörleştirme.
-* ⚡ **Düşünme Durumu & Temiz İletişim (Thinking Indicator UX):** Model düşünürken ve belgeleri incelerken kullanıcıyı bilgilendiren, karmaşık token parçalanması yerine nihai onaylı yanıtı tek seferde sunan kararlı arayüz mimarisi.
-* 🖥️ **Modern Kullanıcı Arayüzü & REST API:** FastAPI Swagger dokümantasyonu ve Streamlit tabanlı modern yönetim paneli.
-
+* 🔒 **100% Local & Air-Gapped:** All embeddings, Cross-Encoder reranking, and LLM inferences execute strictly on your local GPU/CPU. Zero data egress, zero cloud telemetry, and zero token costs.
+* 🎯 **Two-Stage Retrieval:** Combines `BAAI/bge-m3` dense vector search with `BAAI/bge-reranker-v2-m3` Cross-Encoder scoring to extract pinpoint enterprise context within milliseconds.
+* 🛡️ **Self-Correcting Hallucination Guard (Self-RAG):** Evaluates draft answers against retrieved sources. If speculative claims are detected on complex queries, the `refine` node prunes hallucinations and preserves confirmed facts instead of abruptly failing.
+* 🗄️ **Universal Database Connector:** Connects to **PostgreSQL, MSSQL, MySQL, Oracle, and SQLite** via an SQLAlchemy abstraction layer with strict read-only security guards and automated table vectorization.
+* ⚡ **Thinking Indicator UX:** Streamlined user experience featuring interactive thinking indicators while LangGraph verifies claims, delivering complete, verified responses atomically without character flickering.
+* 🌐 **Multilingual & Turkish Response Directives:** Optimized for enterprise multilingual retrieval while maintaining fluent Turkish response generation out of the box.
+* 🖥️ **Full-Stack Suite:** Ready-to-use FastAPI REST gateway (with Swagger OpenAPI docs) paired with a modern Streamlit enterprise control panel.
 
 ---
 
-## 📚 Dokümantasyon Merkezi (Docs Hub)
+## 📚 Documentation Hub
 
-Detaylı teknik konular ve kılavuzlar için özel dokümantasyon sayfalarımızı inceleyebilirsiniz:
+Explore our detailed architectural and operational guides:
 
-| Dokümantasyon Kılavuzu | Açıklama |
+| Guide | Description |
 | :--- | :--- |
-| 🏗️ [**Sistem Mimarisi**](docs/architecture.md) | LangGraph graf yapısı, çift aşamalı reranker ve contextual chunking mimarisi |
-| 📦 [**Kurulum ve Donanım Kılavuzu**](docs/installation.md) | Donanım matrisi (VRAM/RAM), CUDA & PyTorch kurulumu ve çevrimdışı modeller |
-| 🗄️ [**Veritabanı Entegrasyonu**](docs/database_connectors.md) | SQLAlchemy şablonları, Text-to-SQL aracı, güvenlik korumaları ve ETL aktarımı |
-| 🔌 [**REST API Dokümantasyonu**](docs/api_reference.md) | Tüm FastAPI uç noktaları, NDJSON canlı akış protokolü ve cURL örnekleri |
-| 🗺️ [**Gelecek Yol Haritası**](docs/roadmap.md) | Hibrit arama (BM25), GraphRAG, çok turlu sohbet hafızası ve vLLM entegrasyonu |
+| 🏗️ [**System Architecture**](docs/architecture.md) | LangGraph workflow engine, two-stage Cross-Encoder reranking, and contextual chunking |
+| 📦 [**Installation & Hardware Matrix**](docs/installation.md) | VRAM/RAM hardware requirements, CUDA 12.1 setup, and offline model provisioning |
+| 🗄️ [**Database Connectors**](docs/database_connectors.md) | Universal SQLAlchemy configurations, Text-to-SQL security, and ETL table vectorization |
+| 🔌 [**REST API Reference**](docs/api_reference.md) | FastAPI endpoint documentation, NDJSON event streaming protocols, and cURL examples |
+| 🗺️ [**Roadmap**](docs/roadmap.md) | Hybrid search (BM25 + Dense), GraphRAG, multi-turn memory, and vLLM acceleration |
 
 ---
 
-## ⚡ 3 Adımda Hızlı Başlangıç
+## ⚡ Quickstart in 3 Steps
 
-### 1. Depoyu Klonlayın ve Bağımlılıkları Yükleyin
+### 1. Clone Repository & Install Dependencies
 ```bash
-git clone https://github.com/kullaniciadi/OpenLocalEnterpriseRag.git
+git clone https://github.com/your-username/OpenLocalEnterpriseRag.git
 cd OpenLocalEnterpriseRag
 
-# Sanal ortam
+# Create and activate virtual environment
 python -m venv .venv
-.\.venv\Scripts\activate  # Linux/macOS: source .venv/bin/activate
+.\.venv\Scripts\activate   # Linux/macOS: source .venv/bin/activate
 
-# Donanımınıza uygun PyTorch (CUDA 12.1 için) ve paketler
+# Install PyTorch (CUDA 12.1 recommended) and project requirements
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 pip install -r requirements.txt
 ```
 
-### 2. Modelleri Yerel Dizine Sabitleyin (Tek Seferlik)
-Modelleri doğrudan `./models/` klasörüne sabitlemek ve temp şişmesini önlemek için:
+### 2. Download Models Locally (One-time Setup)
+Download model weights directly to `./models` to enable offline air-gapped inference:
 ```bash
 python download_model.py
 ```
 
-### 3. Servisleri Başlatın
-Ayrı terminal pencerelerinde:
+### 3. Launch Services
+Run the backend and UI in separate terminal windows:
 
 ```bash
-# 1. Terminal - Backend API Sunucusu (FastAPI):
+# Terminal 1: Backend API Gateway (FastAPI)
 uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
-# Swagger API: http://localhost:8000/docs
+# Interactive Swagger Documentation: http://localhost:8000/docs
 
-# 2. Terminal - Web Yönetim Paneli (Streamlit):
+# Terminal 2: Enterprise Web Management UI (Streamlit)
 streamlit run ui/app.py
-# Web Paneli: http://localhost:8501
+# Web Dashboard: http://localhost:8501
 ```
 
 ---
 
-## 📁 Dizin Mimarisi
+## 📁 Repository Structure
 
 ```text
 OpenLocalEnterpriseRag/
-├── data/                  # Şirket belgeleri (PDF, DOCX, TXT) ve örnek SQLite veritabanı
-├── models/                # Yerel model ağırlıkları (Qwen2.5-1.5B, BGE-M3, BGE-Reranker)
-├── vector_db/             # ChromaDB kalıcı vektör koleksiyonu
+├── data/                  # Enterprise documents (PDF, DOCX, TXT) and sample SQLite DB
+├── models/                # Local model weights (Qwen2.5-1.5B, BGE-M3, BGE-Reranker)
+├── vector_db/             # ChromaDB persistent vector collection
 ├── ui/
-│   └── app.py             # Streamlit tabanlı kullanıcı ve yönetim arayüzü
+│   └── app.py             # Streamlit enterprise management dashboard & chat UI
 ├── src/
-│   ├── core/              # Çekirdek yapılandırma, dosya yolları ve ortam değişkenleri
-│   ├── rag/               # Doküman yükleyici ve ChromaDB/Reranker arama motoru
-│   ├── agent/             # LangGraph grafı, LLM yükleyici, promptlar ve SQL/hesap araçları
-│   ├── connectors/        # SQLAlchemy evrensel veritabanı bağlayıcı ve ETL aktarıcısı
-│   ├── api/               # FastAPI REST API sunucusu ve otomatik indeksleme
-│   └── main.py            # Geriye dönük uyumlu giriş noktası (uvicorn src.main:app)
-├── docs/                  # [Detaylı Dokümantasyon](docs/)
-├── download_model.py      # Modelleri doğrudan models/ içine indiren betik
-└── requirements.txt       # Proje bağımlılıkları listesi
+│   ├── core/              # System configurations, file paths, and environment settings
+│   ├── rag/               # Contextual document loader and Two-Stage ChromaDB/Reranker engine
+│   ├── agent/             # LangGraph state workflow, LLM loader, prompts, and tools
+│   ├── connectors/        # SQLAlchemy universal database connector and table vectorizer
+│   ├── api/               # FastAPI REST API server with automated startup indexing
+│   └── main.py            # Backward-compatible entrypoint (uvicorn src.main:app)
+├── docs/                  # [Comprehensive Technical Guides](docs/)
+├── download_model.py      # Script to download HuggingFace model weights to local storage
+└── requirements.txt       # Python package dependencies
 ```
 
 ---
 
-## 📄 Lisans
+## 📄 License
 
-Bu proje [MIT Lisansı](LICENSE) ile lisanslanmıştır. Kurumsal ve ticari amaçlarla serbestçe kullanılabilir, değiştirilebilir ve dağıtılabilir.
+This project is licensed under the [MIT License](LICENSE).

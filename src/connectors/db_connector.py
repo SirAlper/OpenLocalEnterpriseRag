@@ -6,10 +6,10 @@ from src.core.config import DATABASE_URL, DB_ALLOWED_TABLES, DB_MAX_ROWS, SAMPLE
 
 
 class DatabaseConnector:
-    """SQLAlchemy tabanlı evrensel, veritabanı-bağımsız ve güvenli veritabanı bağlayıcısı.
+    """SQLAlchemy-based universal, database-agnostic, and secure database connector.
 
-    PostgreSQL, MySQL, SQLite, MSSQL, Oracle gibi tüm ilişkisel veritabanlarını
-    tek bir arayüz üzerinden yönetir. Salt-okunur (read-only) güvenlik korumalarına sahiptir.
+    Manages relational databases (PostgreSQL, MySQL, SQLite, MSSQL, Oracle)
+    through a unified interface with strict read-only security guards.
     """
 
     def __init__(
@@ -29,10 +29,10 @@ class DatabaseConnector:
             self._init_engine()
 
     def _init_engine(self):
-        """SQLAlchemy motorunu başlatır."""
+        """Initialize the SQLAlchemy engine."""
         try:
             from sqlalchemy import create_engine
-            # SQLite için relative path uyumluluğu ve thread güvenliği
+            # SQLite thread safety and path handling
             connect_args = {}
             if self.database_url.startswith("sqlite"):
                 connect_args = {"check_same_thread": False}
@@ -42,7 +42,7 @@ class DatabaseConnector:
                 pool_pre_ping=True,
                 connect_args=connect_args
             )
-            # Test bağlantısı
+            # Test connection
             with self.engine.connect() as conn:
                 pass
             self.is_connected = True
@@ -51,14 +51,14 @@ class DatabaseConnector:
             self.engine = None
             self.is_connected = False
             self._last_error = str(e)
-            print(f"[DatabaseConnector] Bağlantı başlatılamadı: {e}")
+            print(f"[DatabaseConnector] Failed to connect: {e}")
 
     def test_connection(self) -> Dict[str, Any]:
-        """Bağlantıyı test eder, veritabanı türünü ve mevcut tabloları döner."""
+        """Test database connection, return dialect and accessible tables."""
         if not self.database_url:
             return {
                 "status": "not_configured",
-                "message": "Veritabanı URL'si (DATABASE_URL) tanımlanmamış.",
+                "message": "Database URL (DATABASE_URL) is not configured.",
                 "dialect": None,
                 "tables": []
             }
@@ -69,7 +69,7 @@ class DatabaseConnector:
         if not self.is_connected:
             return {
                 "status": "error",
-                "message": f"Bağlantı hatası: {self._last_error}",
+                "message": f"Connection error: {self._last_error}",
                 "dialect": None,
                 "tables": []
             }
@@ -79,7 +79,7 @@ class DatabaseConnector:
             dialect_name = self.engine.dialect.name
             return {
                 "status": "connected",
-                "message": f"Başarıyla bağlandı ({dialect_name.upper()}).",
+                "message": f"Successfully connected ({dialect_name.upper()}).",
                 "dialect": dialect_name,
                 "tables": tables,
                 "table_count": len(tables)
@@ -87,13 +87,13 @@ class DatabaseConnector:
         except Exception as e:
             return {
                 "status": "error",
-                "message": f"Tablolar sorgulanırken hata: {e}",
+                "message": f"Error querying tables: {e}",
                 "dialect": self.engine.dialect.name if self.engine else None,
                 "tables": []
             }
 
     def get_tables(self) -> List[str]:
-        """Erişilebilir tablo adlarını döner (izinli tablolar filtresiyle)."""
+        """Return list of accessible table names (filtered by allowed_tables)."""
         if not self.is_connected or not self.engine:
             return []
 
@@ -101,7 +101,7 @@ class DatabaseConnector:
         inspector = inspect(self.engine)
         all_tables = inspector.get_table_names()
 
-        # Sistem/dahili tabloları hariç tut
+        # Exclude internal / system tables
         ignored_tables = {"sqlite_sequence"}
         tables = [t for t in all_tables if t not in ignored_tables]
 
@@ -111,9 +111,9 @@ class DatabaseConnector:
         return sorted(tables)
 
     def get_schema_summary(self) -> str:
-        """LLM promptları için veritabanı şemasını (tablolar, kolonlar, tipler) metin olarak üretir."""
+        """Generate schema summary (tables, columns, types) as text for LLM prompts."""
         if not self.is_connected or not self.engine:
-            return "Veritabanı bağlantısı aktif değil."
+            return "Database connection is not active."
 
         try:
             from sqlalchemy import inspect
@@ -121,9 +121,9 @@ class DatabaseConnector:
             tables = self.get_tables()
 
             if not tables:
-                return "Erişilebilir tablo bulunamadı."
+                return "No accessible tables found."
 
-            schema_lines = [f"# VERİTABANI ŞEMASI (Tür: {self.engine.dialect.name.upper()})"]
+            schema_lines = [f"# DATABASE SCHEMA (Dialect: {self.engine.dialect.name.upper()})"]
 
             for table in tables:
                 columns = inspector.get_columns(table)
@@ -137,46 +137,46 @@ class DatabaseConnector:
                     is_pk = " [PK]" if col_name in pks else ""
                     col_strs.append(f"{col_name} ({col_type}{is_pk})")
 
-                schema_lines.append(f"Tablo: {table}")
-                schema_lines.append(f"  Kolonlar: {', '.join(col_strs)}")
+                schema_lines.append(f"Table: {table}")
+                schema_lines.append(f"  Columns: {', '.join(col_strs)}")
 
             return "\n".join(schema_lines)
         except Exception as e:
-            return f"Şema çıkarılırken hata: {e}"
+            return f"Error extracting schema: {e}"
 
     def execute_query(self, query: str) -> Dict[str, Any]:
-        """Salt-okunur güvenlik denetimlerinden geçirerek SQL sorgusunu çalıştırır.
+        """Execute SQL query subject to strict read-only security guards.
 
-        Güvenlik Kuralları:
-        1. Sadece 'SELECT' veya 'WITH ... SELECT' sorgularına izin verilir.
-        2. 'INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'EXEC' gibi yazma/silme işlemleri engellenir.
-        3. Sonuç satırları en fazla max_rows ile sınırlandırılır.
+        Security Rules:
+        1. Only 'SELECT' or 'WITH ... SELECT' queries are permitted.
+        2. 'INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'EXEC' are strictly blocked.
+        3. Result rows are capped at max_rows.
         """
         if not self.is_connected or not self.engine:
             return {
                 "status": "error",
-                "message": "Veritabanı bağlantısı aktif değil.",
+                "message": "Database connection is not active.",
                 "columns": [],
                 "rows": []
             }
 
         clean_query = query.strip().rstrip(";").strip()
 
-        # 1. Zararlı anahtar kelime denetimi (Strict Read-Only Guard)
+        # 1. Strict Read-Only Guard against data modification keywords
         forbidden_pattern = r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|EXEC|EXECUTE|CREATE|GRANT|REVOKE|REPLACE)\b"
         if re.search(forbidden_pattern, clean_query, re.IGNORECASE):
             return {
                 "status": "error",
-                "message": "Güvenlik Engeli: Yalnızca salt-okunur (SELECT) sorgular çalıştırılabilir.",
+                "message": "Security Guard: Only read-only (SELECT) queries are allowed.",
                 "columns": [],
                 "rows": []
             }
 
-        # 2. SELECT veya WITH ile başlama kontrolü
+        # 2. Must start with SELECT or WITH
         if not re.match(r"^(SELECT|WITH)\b", clean_query, re.IGNORECASE):
             return {
                 "status": "error",
-                "message": "Geçersiz Sorgu: Sorgu 'SELECT' veya 'WITH' ile başlamalıdır.",
+                "message": "Invalid Query: Query must start with 'SELECT' or 'WITH'.",
                 "columns": [],
                 "rows": []
             }
@@ -188,7 +188,7 @@ class DatabaseConnector:
                 columns = list(result.keys()) if result.returns_rows else []
                 raw_rows = result.fetchmany(self.max_rows) if result.returns_rows else []
 
-                # JSON serileştirilebilir formata dönüştür
+                # Convert to JSON serializable dictionaries
                 formatted_rows = []
                 for row in raw_rows:
                     row_dict = {}
@@ -211,21 +211,21 @@ class DatabaseConnector:
         except Exception as e:
             return {
                 "status": "error",
-                "message": f"Sorgu yürütülürken hata: {e}",
+                "message": f"Error executing query: {e}",
                 "columns": [],
                 "rows": []
             }
 
 
 def create_sample_sqlite_db(db_path: Optional[str] = None) -> str:
-    """Açık kaynaklı depoyu klonlayanların anında test edebilmesi için örnek kurumsal SQLite veri tabanı üretir."""
+    """Generate sample enterprise SQLite database for instant zero-config testing."""
     target_path = db_path or SAMPLE_DB_PATH
     os.makedirs(os.path.dirname(target_path), exist_ok=True)
 
     conn = sqlite3.connect(target_path)
     cursor = conn.cursor()
 
-    # 1. Ürünler Tablosu
+    # 1. Products Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS urunler (
         urun_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -237,7 +237,7 @@ def create_sample_sqlite_db(db_path: Optional[str] = None) -> str:
     );
     """)
 
-    # 2. Satışlar Tablosu
+    # 2. Sales Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS satislar (
         satis_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -252,7 +252,7 @@ def create_sample_sqlite_db(db_path: Optional[str] = None) -> str:
     );
     """)
 
-    # 3. Destek Talepleri Tablosu
+    # 3. Support Requests Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS destek_talepleri (
         talep_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -265,35 +265,35 @@ def create_sample_sqlite_db(db_path: Optional[str] = None) -> str:
     );
     """)
 
-    # Örnek veri kontrolü
+    # Populate initial sample records if empty
     cursor.execute("SELECT COUNT(*) FROM urunler;")
     if cursor.fetchone()[0] == 0:
         cursor.executemany("""
         INSERT INTO urunler (sku, urun_adi, kategori, birim_fiyat, stok_adedi) VALUES (?, ?, ?, ?, ?);
         """, [
-            ("NT-SRV-01", "NovaTech Enterprise Sunucu X1", "Donanım", 85000.0, 14),
-            ("NT-LPT-02", "NovaTech ProBook 15 G3", "Bilgisayar", 38500.0, 45),
-            ("NT-SEC-03", "NovaShield Kurumsal Güvenlik Duvarı", "Güvenlik", 62000.0, 8),
-            ("NT-SFT-04", "NovaERP Bulut Lisansı (Yıllık)", "Yazılım", 120000.0, 100),
-            ("NT-MON-05", "NovaView 27 inç 4K Monitör", "Aksesuar", 9400.0, 60),
+            ("NT-SRV-01", "NovaTech Enterprise Server X1", "Hardware", 85000.0, 14),
+            ("NT-LPT-02", "NovaTech ProBook 15 G3", "Computer", 38500.0, 45),
+            ("NT-SEC-03", "NovaShield Enterprise Firewall", "Security", 62000.0, 8),
+            ("NT-SFT-04", "NovaERP Cloud License (Annual)", "Software", 120000.0, 100),
+            ("NT-MON-05", "NovaView 27-inch 4K Monitor", "Accessory", 9400.0, 60),
         ])
 
         cursor.executemany("""
         INSERT INTO satislar (siparis_no, musteri_adi, urun_id, adet, toplam_tutar, bolge, tarih) VALUES (?, ?, ?, ?, ?, ?, ?);
         """, [
-            ("ORD-2026-001", "Anadolu Lojistik A.Ş.", 1, 2, 170000.0, "Marmara", "2026-01-15"),
-            ("ORD-2026-002", "Başkent Sağlık Grubu", 2, 5, 192500.0, "İç Anadolu", "2026-01-18"),
-            ("ORD-2026-003", "Ege Bilişim Teknolojileri", 3, 1, 62000.0, "Ege", "2026-02-02"),
-            ("ORD-2026-004", "Akdeniz Perakende Ltd.", 4, 1, 120000.0, "Akdeniz", "2026-02-14"),
-            ("ORD-2026-005", "Anadolu Lojistik A.Ş.", 5, 4, 37600.0, "Marmara", "2026-03-01"),
+            ("ORD-2026-001", "Anadolu Logistics Corp.", 1, 2, 170000.0, "Marmara", "2026-01-15"),
+            ("ORD-2026-002", "Capital Health Group", 2, 5, 192500.0, "Central", "2026-01-18"),
+            ("ORD-2026-003", "Aegean IT Systems", 3, 1, 62000.0, "Aegean", "2026-02-02"),
+            ("ORD-2026-004", "Mediterranean Retail Ltd.", 4, 1, 120000.0, "Mediterranean", "2026-02-14"),
+            ("ORD-2026-005", "Anadolu Logistics Corp.", 5, 4, 37600.0, "Marmara", "2026-03-01"),
         ])
 
         cursor.executemany("""
         INSERT INTO destek_talepleri (talep_kodu, musteri_adi, konu, detay, cozum, durum) VALUES (?, ?, ?, ?, ?, ?);
         """, [
-            ("SR-2026-101", "Anadolu Lojistik A.Ş.", "Sunucu BIOS Güncellemesi", "Enterprise Sunucu X1 yeniden başlatma sonrası IPMI bağlantısı kesildi.", "IPMI firmware 2.14 yaması uygulandı ve statik IP yeniden tanımlandı.", "Çözüldü"),
-            ("SR-2026-102", "Başkent Sağlık Grubu", "ERP Lisans Aktivasyon Hatası", "Kullanıcılar eşzamanlı oturum açarken 'Lisans Limiti Aşıldı' uyarısı alıyor.", "Lisans sunucusundaki askıda kalan oturumlar sonlandırıldı ve havuz temizlendi.", "Çözüldü"),
-            ("SR-2026-103", "Ege Bilişim Teknolojileri", "Güvenlik Duvarı VPN Yapılandırması", "Şube ofisleri arasında IPsec tüneli kurulurken IKEv2 anahtar uyuşmazlığı yaşandı.", "Faz-1 ve Faz-2 şifreleme algoritmaları AES-256 olarak eşitlendi.", "Çözüldü"),
+            ("SR-2026-101", "Anadolu Logistics Corp.", "Server BIOS Update", "IPMI disconnected after Enterprise Server X1 reboot.", "Applied IPMI firmware 2.14 patch and reset static IP.", "Resolved"),
+            ("SR-2026-102", "Capital Health Group", "ERP License Activation Error", "Users receiving 'License Limit Exceeded' warning.", "Terminated stale sessions on license server and cleaned connection pool.", "Resolved"),
+            ("SR-2026-103", "Aegean IT Systems", "Firewall VPN Setup", "IKEv2 key mismatch when establishing IPsec tunnel.", "Synchronized Phase-1 and Phase-2 encryption algorithms to AES-256.", "Resolved"),
         ])
 
     conn.commit()

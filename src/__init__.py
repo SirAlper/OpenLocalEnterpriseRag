@@ -1,10 +1,11 @@
 """OpenLocalEnterpriseRag Package.
 
-Modüler Katmanlar:
-- src.core: Yapılandırma ve temel sistem ayarları
-- src.rag: Doküman yükleyici ve vektör motoru
-- src.agent: LLM, promptlar, LangGraph iş akışı ve sorgu servisi
-- src.api: FastAPI REST API sunucusu
+Modular Architecture:
+- src.core: System configuration and environment settings
+- src.rag: Contextual document loader and vector search engine
+- src.agent: LLM pipeline, prompts, LangGraph workflow, and query service
+- src.connectors: Universal database connector and table vectorizer
+- src.api: FastAPI REST API gateway
 """
 from src.core.config import (
     BASE_DIR,

@@ -1,38 +1,38 @@
-# 📦 Kurulum ve Donanım Kılavuzu
+# 📦 Installation & Hardware Guide
 
-Bu kılavuz, `OpenLocalEnterpriseRag` sisteminin yerel iş istasyonlarında veya kurumsal sunucularda donanım hızlandırmalı olarak nasıl kurulacağını adım adım açıklar.
+This guide provides step-by-step instructions for deploying `OpenLocalEnterpriseRag` on local workstations or enterprise on-premise servers with hardware acceleration.
 
 ---
 
-## 💻 Sistem ve Donanım Gereksinimleri
+## 💻 System & Hardware Requirements
 
-Sistem, bge-m3 embedding, bge-reranker ve Qwen2.5-1.5B modelini aynı anda optimize şekilde çalıştıracak biçimde tasarlanmıştır:
+The system is engineered to run the multilingual embedding model, Cross-Encoder reranker, and Qwen2.5-1.5B concurrently with optimal memory allocation:
 
-| Bileşen | Minimum | Önerilen Kurumsal |
+| Component | Minimum Requirements | Recommended Enterprise Setup |
 | :--- | :--- | :--- |
-| **İşletim Sistemi** | Ubuntu 22.04 LTS / Windows 11 | Ubuntu 22.04 LTS / Windows 11 / RHEL 9 |
-| **Python** | 3.10+ | 3.11 veya 3.12 |
-| **Sistem RAM** | 8 GB DDR4 | 16 GB+ RAM |
+| **Operating System** | Ubuntu 22.04 LTS / Windows 11 | Ubuntu 22.04 LTS / Windows 11 / RHEL 9 |
+| **Python** | 3.10+ | 3.11 or 3.12 |
+| **System RAM** | 8 GB DDR4 | 16 GB+ RAM |
 | **GPU / VRAM** | NVIDIA GPU (**Min 4-6 GB VRAM**) | NVIDIA RTX 3060 / 4060 / A4000+ (8+ GB VRAM) |
-| **CUDA Sürümü** | CUDA 11.8+ | CUDA 12.1+ |
+| **CUDA Version** | CUDA 11.8+ | CUDA 12.1+ |
 
-> **Bellek Dağılım Notu:**  
-> - `bge-m3` Embedding: ~1.1 GB (CPU üzerinde çalıştırılarak VRAM korunur)  
-> - `bge-reranker-v2-m3`: ~1.1 GB (CPU üzerinde çalıştırılır)  
-> - `Qwen2.5-1.5B-Instruct` LLM: ~2.8 GB (BF16 formatında doğrudan GPU VRAM'e alınır)  
-> - Toplam VRAM Tüketimi: **Sadece ~3 GB!** (NVIDIA kartı bulunmadığında tüm sistem CPU üzerinde de çalıştırılabilir).
+> **Memory Allocation Architecture:**  
+> - `bge-m3` Embedding Model: ~1.1 GB (Runs on CPU to preserve GPU memory)  
+> - `bge-reranker-v2-m3` Reranker Model: ~1.1 GB (Runs on CPU)  
+> - `Qwen2.5-1.5B-Instruct` LLM: ~2.8 GB (Loaded directly into GPU VRAM in BF16 format)  
+> - **Total GPU VRAM Footprint: ~3 GB!** (If no NVIDIA GPU is detected, the entire pipeline falls back to CPU execution).
 
 ---
 
-## 🛠️ Adım Adım Kurulum
+## 🛠️ Step-by-Step Installation
 
-### 1. Depoyu Klonlayın
+### 1. Clone the Repository
 ```bash
-git clone https://github.com/kullaniciadi/local-enterprise-rag.git
-cd local-enterprise-rag
+git clone https://github.com/your-username/OpenLocalEnterpriseRag.git
+cd OpenLocalEnterpriseRag
 ```
 
-### 2. Sanal Ortamı Oluşturun ve Aktifleştirin
+### 2. Create and Activate Virtual Environment
 ```bash
 # Linux / macOS
 python3 -m venv .venv
@@ -43,11 +43,11 @@ python -m venv .venv
 .\.venv\Scripts\activate
 ```
 
-### 3. PyTorch'u Donanımınıza Uygun CUDA Sürümüyle Kurun
+### 3. Install PyTorch with Hardware Acceleration (CUDA)
 
-> **Önemli:** Modellerin GPU hızlandırmasıyla çalışabilmesi için PyTorch'u doğrudan resmi CUDA indeksi üzerinden kurmalısınız.
+> **Important:** To leverage GPU acceleration, install PyTorch matching your CUDA version from the official PyTorch index:
 
-* **NVIDIA GPU (CUDA 12.1 - Önerilen):**
+* **NVIDIA GPU (CUDA 12.1 - Recommended):**
   ```bash
   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
   ```
@@ -57,12 +57,12 @@ python -m venv .venv
   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
   ```
 
-* **Yalnızca CPU (Test ve Geliştirme):**
+* **CPU-Only (Testing / Development without GPU):**
   ```bash
   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
   ```
 
-### 4. Bağımlılıkları Yükleyin
+### 4. Install Project Dependencies
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
@@ -70,35 +70,35 @@ pip install -r requirements.txt
 
 ---
 
-## 📥 Modelleri Yerel Dizine Sabitleme (`download_model.py`)
+## 📥 Provisioning Models Locally (`download_model.py`)
 
-Sistem çalışırken modellerin internetten indirilip `~/.cache` veya `Temp` dizinlerini şişirmesini önlemek için modeller doğrudan proje altındaki `./models/` klasörüne sabitlenir.
+To prevent runtime downloads and avoid inflating `~/.cache` or OS temp directories, model weights are pinned directly into the project's `./models/` directory.
 
-Tek seferlik çalıştırmanız yeterlidir:
+Run the provisioning script once:
 ```bash
 python download_model.py
 ```
 
-Bu komut şu modelleri indirir:
-1. `models/bge-m3`: Çok dilli semantik vektör modeli (~1.1 GB)
-2. `models/bge-reranker-v2-m3`: Çapraz kodlayıcı yeniden sıralayıcı (~1.1 GB)
-3. `models/qwen2.5-1.5b`: Qwen 2.5 1.5B Türkçe uyumlu küçük dil modeli (~2.8 GB)
+This script downloads:
+1. `models/bge-m3`: Multilingual semantic dense vector model (~1.1 GB)
+2. `models/bge-reranker-v2-m3`: Cross-Encoder reranker model (~1.1 GB)
+3. `models/qwen2.5-1.5b`: Qwen 2.5 1.5B Instruct model (~2.8 GB)
 
-İndirme tamamlandığında sistem **tamamen çevrimdışı (offline)** modda çalışmaya hazırdır.
+Once downloaded, the system runs in **100% offline (air-gapped)** mode.
 
 ---
 
-## 🚀 Servisleri Başlatma
+## 🚀 Launching Services
 
-### Backend (FastAPI API Sunucusu):
+### Backend (FastAPI Gateway):
 ```bash
 uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-* **Swagger API Dokümantasyonu:** `http://localhost:8000/docs`
+* **Interactive Swagger Documentation:** `http://localhost:8000/docs`
 
-### Frontend (Streamlit Kullanıcı Paneli):
-Ayrı bir terminal penceresinde:
+### Frontend (Streamlit Dashboard):
+In a separate terminal window:
 ```bash
 streamlit run ui/app.py
 ```
-* **Kullanıcı Arayüzü:** `http://localhost:8501`
+* **Web UI:** `http://localhost:8501`

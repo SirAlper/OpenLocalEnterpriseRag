@@ -3,10 +3,7 @@ from src.connectors.db_connector import DatabaseConnector
 
 
 class DatabaseTableLoader:
-    """Veritabanı tablolarındaki metin kayıtlarını okuyup ChromaDB vektör motoruna
-
-    aktarılabilir belgelere (chunk) dönüştüren evrensel ETL sınıfı.
-    """
+    """ETL loader that reads relational database tables and transforms records into ChromaDB vector chunks."""
 
     def __init__(self, db_connector: DatabaseConnector):
         self.db = db_connector
@@ -18,19 +15,18 @@ class DatabaseTableLoader:
         title_column: Optional[str] = None,
         id_column: Optional[str] = None
     ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
-        """Belirtilen tablodaki satırları okur, bağlamsal başlık ve etiketlerle zenginleştirip parçalara dönüştürür."""
+        """Read rows from specified table, enrich with contextual headers, and convert to vector chunks."""
         chunks = []
         ids = []
         metadatas = []
 
         if not self.db.is_connected or not self.db.engine:
-            print("[DatabaseTableLoader] Veritabanı bağlantısı yok.")
+            print("[DatabaseTableLoader] No active database connection.")
             return chunks, ids, metadatas
 
-        # Tabloyu sorgula
         query_result = self.db.execute_query(f"SELECT * FROM {table_name}")
         if query_result["status"] != "success":
-            print(f"[DatabaseTableLoader] Hata: {query_result.get('message')}")
+            print(f"[DatabaseTableLoader] Query error: {query_result.get('message')}")
             return chunks, ids, metadatas
 
         rows = query_result.get("rows", [])
@@ -39,10 +35,9 @@ class DatabaseTableLoader:
         if not rows:
             return chunks, ids, metadatas
 
-        # Hedef kolonları belirle (özelleştirilmemişse tüm kolonlar)
         target_cols = text_columns if text_columns else columns
 
-        # ID kolonunu tespit et (id_column verilmemişse 'id' içeren ilk kolonu ara)
+        # Detect primary key / ID column
         actual_id_col = id_column
         if not actual_id_col:
             for col in columns:
@@ -56,11 +51,9 @@ class DatabaseTableLoader:
             row_id_val = row.get(actual_id_col, idx + 1)
             chunk_id = f"db_{table_name}_row_{row_id_val}"
 
-            # Başlık bilgisi
             title_text = f" | {row.get(title_column)}" if title_column and row.get(title_column) else ""
-            header = f"[Veritabanı Tablosu: {table_name} | Kayıt: #{row_id_val}{title_text}]"
+            header = f"[Database Table: {table_name} | Record: #{row_id_val}{title_text}]"
 
-            # Satır içeriğini yapılandırılmış metne dönüştür
             row_content_lines = []
             for col in target_cols:
                 val = row.get(col)

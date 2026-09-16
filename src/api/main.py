@@ -23,11 +23,11 @@ from src.core.config import (
 
 app = FastAPI(
     title="Enterprise Local RAG API",
-    description="Bulut bağımlılığı olmayan, veri gizliliği odaklı yerel RAG ve Ajan sistemi.",
+    description="Privacy-first, on-premise RAG and Agentic AI gateway with zero cloud dependencies.",
     version="1.1.0"
 )
 
-# CORS ayarları (Streamlit veya Web arayüzünden doğrudan erişim için)
+# CORS configuration (enables direct access from frontend / Streamlit apps)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -36,24 +36,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Servisleri başlat
+# Initialize core services
 rag_engine = RAGEngine()
 agent = EnterpriseRAGAgent(rag_engine)
 document_loader = DocumentLoader(DOCS_PATH)
 
-# Veritabanı bağlayıcısını başlat (eğer URL yoksa test için sample_enterprise.db hazırla)
+# Initialize database connector (prepare sample_enterprise.db if no URL configured)
 if not DATABASE_URL and not os.path.exists(SAMPLE_DB_PATH):
     try:
         create_sample_sqlite_db(SAMPLE_DB_PATH)
     except Exception as e:
-        print(f"[Sample DB] Örnek veritabanı oluşturulamadı: {e}")
+        print(f"[Sample DB] Could not create sample database: {e}")
 
 db_connector = DatabaseConnector()
 db_loader = DatabaseTableLoader(db_connector)
 
 
 def auto_index_on_startup():
-    """Sunucu başlarken data/ klasöründeki henüz indekslenmemiş belgeleri otomatik algılayıp ChromaDB'ye ekler."""
+    """Scan data/ folder on server startup and automatically index any unindexed documents into ChromaDB."""
     if not os.path.exists(DOCS_PATH):
         os.makedirs(DOCS_PATH)
         return
@@ -70,23 +70,23 @@ def auto_index_on_startup():
     unindexed = [f for f in data_files if f not in indexed_files]
 
     if not unindexed:
-        print(f"[Otomatik İndeksleme] data/ klasöründe indekslenmemiş belge yok. ({len(indexed_files)} belge zaten indeksli)")
+        print(f"[Auto-Indexing] No unindexed documents found in data/. ({len(indexed_files)} files already indexed)")
         return
 
-    print(f"[Otomatik İndeksleme] {len(unindexed)} yeni belge tespit edildi, indeksleniyor...")
+    print(f"[Auto-Indexing] Detected {len(unindexed)} new document(s), indexing...")
     for filename in unindexed:
         file_path = os.path.join(DOCS_PATH, filename)
         chunks, ids, metadatas = document_loader.load_and_chunk_file(file_path)
         if chunks:
             rag_engine.add_documents(chunks, ids, metadatas)
-            print(f"  ✓ '{filename}' → {len(chunks)} parça indekslendi.")
+            print(f"  ✓ '{filename}' -> {len(chunks)} chunks indexed.")
         else:
-            print(f"  ✗ '{filename}' → ayrıştırılabilir metin bulunamadı.")
+            print(f"  ✗ '{filename}' -> no parseable text found.")
 
-    print(f"[Otomatik İndeksleme] Tamamlandı!")
+    print("[Auto-Indexing] Completed successfully!")
 
 
-# Sunucu başlarken otomatik indekslemeyi çalıştır
+# Run auto-indexing on server startup
 auto_index_on_startup()
 
 
@@ -105,9 +105,9 @@ class TestQueryRequest(BaseModel):
     query: str
 
 
-@app.get("/api/v1/stats", summary="Sistem ve Vektör Veritabanı İstatistikleri")
+@app.get("/api/v1/stats", summary="System and Vector Store Statistics")
 def get_system_stats():
-    """Sistem donanımı, aktif modeller ve indeks istatistiklerini döner."""
+    """Return hardware acceleration details, active models, and index statistics."""
     db_stats = rag_engine.get_stats()
     device = "CUDA (NVIDIA GPU)" if torch.cuda.is_available() else "CPU"
     db_conn_info = db_connector.test_connection()
@@ -124,9 +124,9 @@ def get_system_stats():
     }
 
 
-@app.get("/api/v1/documents", summary="İndekslenmiş ve Yüklü Belgeleri Listele")
+@app.get("/api/v1/documents", summary="List Indexed Documents")
 def list_documents():
-    """data/ dizinindeki dosyaları ve vektör tabanındaki parça sayılarını listeler."""
+    """List files in data/ directory along with their chunk counts in ChromaDB."""
     if not os.path.exists(DOCS_PATH):
         os.makedirs(DOCS_PATH)
 
@@ -148,9 +148,9 @@ def list_documents():
     return {"status": "success", "count": len(files), "documents": files}
 
 
-@app.delete("/api/v1/documents/{filename}", summary="Belgeyi ve Vektör İndeksini Sil")
+@app.delete("/api/v1/documents/{filename}", summary="Delete Document and Vector Chunks")
 def delete_document(filename: str):
-    """Belirtilen dosyayı hem data/ klasöründen hem de ChromaDB'den tamamen siler."""
+    """Permanently delete specified file from data/ directory and remove chunks from ChromaDB."""
     file_path = os.path.join(DOCS_PATH, filename)
     file_deleted = False
 
@@ -161,54 +161,54 @@ def delete_document(filename: str):
     deleted_chunks = rag_engine.delete_document(filename)
 
     if not file_deleted and deleted_chunks == 0:
-        raise HTTPException(status_code=404, detail=f"'{filename}' bulunamadı.")
+        raise HTTPException(status_code=404, detail=f"'{filename}' was not found.")
 
     return {
         "status": "success",
-        "message": f"'{filename}' başarıyla silindi.",
+        "message": f"'{filename}' was deleted successfully.",
         "deleted_chunks": deleted_chunks,
         "file_deleted": file_deleted
     }
 
 
-@app.post("/api/v1/upload-file", summary="Sisteme PDF veya Belge Yükle")
+@app.post("/api/v1/upload-file", summary="Upload and Index Document")
 async def upload_file(file: UploadFile = File(...)):
-    """Yeni bir belge yükler, parçalar ve ChromaDB'ye indeksler."""
+    """Upload a new PDF, DOCX, or TXT document, chunk it, and index it into ChromaDB."""
     if not os.path.exists(DOCS_PATH):
         os.makedirs(DOCS_PATH)
 
-    # 1. Dosyayı data/ dizinine kaydet
+    # 1. Save uploaded file to data/ directory
     file_path = os.path.join(DOCS_PATH, file.filename)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 2. Sadece yüklenen tek dosyayı oku ve parçala (Artımlı İndeksleme)
+    # 2. Chunk uploaded file (Incremental Indexing)
     chunks, ids, metadatas = document_loader.load_and_chunk_file(file_path)
 
     if not chunks:
         return {
             "status": "warning",
-            "message": f"'{file.filename}' yüklendi fakat ayrıştırılabilir metin bulunamadı.",
+            "message": f"'{file.filename}' uploaded, but no parseable text was extracted.",
             "chunk_count": 0
         }
 
-    # 3. Vektör tabanına yaz (Güncelleme durumunda önce eski parçaları temizle)
+    # 3. Upsert to vector database (clean older chunks if file previously existed)
     rag_engine.delete_document(file.filename)
     rag_engine.add_documents(chunks, ids, metadatas)
 
     return {
         "status": "success",
-        "message": f"'{file.filename}' başarıyla yüklendi ve indekslendi.",
+        "message": f"'{file.filename}' successfully uploaded and indexed.",
         "filename": file.filename,
         "chunk_count": len(chunks)
     }
 
 
-@app.post("/api/v1/query", summary="Yapay Zekaya Soru Sor")
+@app.post("/api/v1/query", summary="Query Enterprise AI Assistant")
 def query_rag(request: QueryRequest):
-    """RAG Ajanı üzerinden soruya cevap, referans kaynakları ve denetim sonucunu döner."""
+    """Execute LangGraph workflow and return verified answer, reference sources, and audit status."""
     try:
-        print(f"Kullanıcı sorusu: {request.question}")
+        print(f"[API /query] Received user question: {request.question}")
         result = agent.query(request.question)
         return {
             "status": "success",
@@ -221,11 +221,11 @@ def query_rag(request: QueryRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/v1/query-stream", summary="Yapay Zekaya Soru Sor (Durum Akışı / Event Stream)")
+@app.post("/api/v1/query-stream", summary="Query Enterprise AI Assistant (Event Stream)")
 def query_rag_stream(request: QueryRequest):
-    """RAG Ajanı üzerinden aşama durumlarını ve nihai yanıtı anlık akış (ndjson) olarak iletir."""
+    """Stream LangGraph stage events and deliver final answer via NDJSON format."""
     try:
-        print(f"Durum akışı kullanıcı sorusu: {request.question}")
+        print(f"[API /query-stream] Received streaming question: {request.question}")
 
         def event_generator():
             for event in agent.stream_events(request.question):
@@ -236,10 +236,9 @@ def query_rag_stream(request: QueryRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
-@app.get("/api/v1/database/status", summary="Veritabanı Bağlantı Durumu ve Şeması")
+@app.get("/api/v1/database/status", summary="Database Connection Status and Schema")
 def get_database_status():
-    """Veritabanı bağlantı durumunu, türünü ve erişilebilir tabloları döner."""
+    """Return database connection status, dialect type, and accessible tables."""
     conn_info = db_connector.test_connection()
     schema_summary = db_connector.get_schema_summary() if db_connector.is_connected else ""
     return {
@@ -249,20 +248,20 @@ def get_database_status():
     }
 
 
-@app.post("/api/v1/database/test-query", summary="Güvenli Salt-Okunur SQL Çalıştır")
+@app.post("/api/v1/database/test-query", summary="Execute Safe Read-Only SQL Query")
 def run_database_query(req: TestQueryRequest):
-    """Yalnızca SELECT sorguları çalıştırır, güvenlik kurallarına uymayanları engeller."""
+    """Execute safe read-only SELECT query against the connected database."""
     result = db_connector.execute_query(req.query)
     if result.get("status") == "error":
         raise HTTPException(status_code=400, detail=result.get("message"))
     return {"status": "success", "data": result}
 
 
-@app.post("/api/v1/database/sync-table", summary="Veritabanı Tablosunu Vektör İndeksine Aktar")
+@app.post("/api/v1/database/sync-table", summary="Sync Database Table into Vector Index")
 def sync_database_table(req: SyncTableRequest):
-    """Belirtilen tablodaki satırları metin parçalarına dönüştürüp ChromaDB'ye indeksler."""
+    """Convert relational table rows into contextual text chunks and index into ChromaDB."""
     if not db_connector.is_connected:
-        raise HTTPException(status_code=400, detail="Veritabanı bağlantısı aktif değil.")
+        raise HTTPException(status_code=400, detail="Database connection is not active.")
 
     chunks, ids, metadatas = db_loader.load_table_as_chunks(
         table_name=req.table_name,
@@ -274,17 +273,17 @@ def sync_database_table(req: SyncTableRequest):
     if not chunks:
         return {
             "status": "warning",
-            "message": f"'{req.table_name}' tablosunda aktarılacak satır bulunamadı.",
+            "message": f"Table '{req.table_name}' has no rows to index.",
             "chunk_count": 0
         }
 
-    # Eski tablo kayıtlarını temizle ve yenilerini ekle
+    # Remove old table records and upsert new chunks
     rag_engine.delete_document(f"db_{req.table_name}")
     rag_engine.add_documents(chunks, ids, metadatas)
 
     return {
         "status": "success",
-        "message": f"'{req.table_name}' tablosundaki {len(chunks)} kayıt başarıyla vektörleştirildi.",
+        "message": f"Successfully indexed {len(chunks)} rows from table '{req.table_name}'.",
         "table_name": req.table_name,
         "chunk_count": len(chunks)
     }
@@ -292,5 +291,5 @@ def sync_database_table(req: SyncTableRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    # Dosya yüklemelerinde sunucunun modeli bellekten düşürüp baştan yüklemesini önlemek için reload=False
+    # Use reload=False to prevent reloading model weights on disk modifications
     uvicorn.run("src.main:app", host="0.0.0.0", port=8000, reload=False)

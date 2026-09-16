@@ -1,6 +1,6 @@
 import os
 
-# İndirme işlemi için Hugging Face Hub çevrimiçi erişimini sağla
+# Enable Hugging Face Hub online access for model downloading
 os.environ["ALLOW_ONLINE_HF"] = "1"
 os.environ["HF_HUB_OFFLINE"] = "0"
 os.environ["TRANSFORMERS_OFFLINE"] = "0"
@@ -12,17 +12,17 @@ os.makedirs(MODELS_DIR, exist_ok=True)
 
 models = [
     {
-        "name": "1/3 - Çok Dilli Embedding Modeli (BAAI/bge-m3)",
+        "name": "1/3 - Multilingual Embedding Model (BAAI/bge-m3)",
         "repo_id": "BAAI/bge-m3",
         "local_dir": LOCAL_EMBEDDING_PATH
     },
     {
-        "name": "2/3 - Reranker Modeli (BAAI/bge-reranker-v2-m3)",
+        "name": "2/3 - Cross-Encoder Reranker Model (BAAI/bge-reranker-v2-m3)",
         "repo_id": "BAAI/bge-reranker-v2-m3",
         "local_dir": LOCAL_RERANKER_PATH
     },
     {
-        "name": "3/3 - Küçük Dil Modeli (SLM - Qwen2.5-1.5B-Instruct)",
+        "name": "3/3 - Small Language Model (SLM - Qwen2.5-1.5B-Instruct)",
         "repo_id": "Qwen/Qwen2.5-1.5B-Instruct",
         "local_dir": LOCAL_LLM_PATH
     }
@@ -30,7 +30,7 @@ models = [
 
 if __name__ == "__main__":
     for item in models:
-        print(f"\nHazırlanıyor / İndiriliyor: {item['name']} -> {item['local_dir']}...")
+        print(f"\nDownloading / Verifying: {item['name']} -> {item['local_dir']}...")
         snapshot_download(
             repo_id=item["repo_id"],
             local_dir=item["local_dir"],
@@ -38,4 +38,4 @@ if __name__ == "__main__":
             ignore_patterns=["*.onnx", "*.onnx_data", "onnx/*", "imgs/*", "*.jpg", "*.png"]
         )
 
-    print("\n Modeller başarıyla doğrudan './models' klasörüne sabitlendi! Artık temp/cache şişmesi olmadan çalışabilirsin.")
+    print("\nModels successfully saved to './models' directory! The system can now run in offline/air-gapped mode.")

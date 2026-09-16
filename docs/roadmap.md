@@ -1,59 +1,59 @@
-# 🗺️ Gelecek Yol Haritası (Roadmap)
+# 🗺️ Project Roadmap
 
-`OpenLocalEnterpriseRag` projesinin açık kaynaklı vizyonunu dünya standartlarında bir kurumsal yapay zeka altyapısına taşımak için planlanan geliştirme aşamaları aşağıda kategorize edilmiştir.
-
----
-
-## 🔍 1. İleri Düzey Arama & Zengin Veri Desteği (Advanced Retrieval)
-
-- [ ] **Hibrit Arama (Hybrid Search / BM25 + Vektör):**
-  - Anlamsal vektör araması ile anahtar kelime/kod aramasını (BM25) *Reciprocal Rank Fusion (RRF)* ile birleştirerek ürün kodları veya teknik terimlerde %100 isabet sağlama.
-- [ ] **Zengin Format & Tablo Ayrıştırma:**
-  - Excel (`.xlsx`), CSV ve karmaşık PDF tablolarından oluşan kurumsal veriler için yapısal veri ayrıştırma (unstructured table parsing & chunking).
-- [ ] **Hiyerarşik & Parent-Child Parçalama:**
-  - Küçük metin parçalarıyla hassas arama yapıp LLM üretimine üst başlık ve geniş bağlamı sunan iki katmanlı indeksleme.
-- [ ] **Graf Tabanlı RAG (GraphRAG):**
-  - Kurumsal belgeler arasındaki varlıkları (Entity) ve ilişkileri bilgi grafiğine (Knowledge Graph) dönüştürerek derin nedensellik ve çapraz analiz sorguları yapabilme.
+The strategic development roadmap for `OpenLocalEnterpriseRag` is structured below to expand its capabilities as a world-class on-premise enterprise AI infrastructure.
 
 ---
 
-## 🤖 2. Yeni Nesil Ajan Mimarisi (Next-Gen Agentic RAG)
+## 🔍 1. Advanced Retrieval & Structured Ingestion
 
-- [ ] **Çok Turlu Sohbet Belleği (Multi-Turn Chat with Checkpointer):**
-  - LangGraph Memory / SqliteSaver entegrasyonu ile kullanıcı oturumlarını ve önceki konuşma bağlamını hatırlama.
-- [ ] **Dinamik Sorgu Yeniden Yazma (Query Rewriter & Expansion):**
-  - Kullanıcının eksik veya muğlak sorularını vektör aramasına en uygun formata çeviren akıllı ajan düğümü.
-- [x] **Öz-Düzeltmeli ve Budamalı Halüsinasyon Kalkanı (Self-Correction & Refinement Loop):**
-  - Uzun yanıtlarda ikili (evet/hayır) fallback çıkmazını önleyen, taslak yanıttaki belgesiz iddiaları budayıp kanıtlı kısımları koruyan `refine` düğümü LangGraph grafına eklendi.
-- [x] **İlişkisel Veritabanı ve Text-to-SQL Entegrasyonu (SQL Database Connector & Tools):**
-  - SQLAlchemy tabanlı evrensel konnektör (`src/connectors/db_connector.py`) ile PostgreSQL, MSSQL, MySQL, Oracle ve SQLite desteği tamamlandı.
-  - Sıkı salt-okunur (strict read-only) güvenlik filtreleri, otomatik `LIMIT` ve tablo beyaz listesi (`DB_ALLOWED_TABLES`) eklendi.
-  - Tablo kayıtlarını ChromaDB formatına çeviren ETL motoru (`DatabaseTableLoader`) ve ajan araçları (`sql_db_query`, `sql_db_schema`) entegre edildi.
-- [ ] **Yönlendirici & Çoklu Ajan Takımları (Router & Multi-Agent Teams):**
-  - Soruları şirket dokümanı, ilişkisel veritabanı sorgusu veya hesaplama araçları arasında dinamik paylaştıran süpervizör (supervisor) ajan mimarisi.
-- [ ] **Kullanıcı Geri Bildirim Döngüsü (Feedback Loop):**
-  - Web arayüzü üzerinden yanıtları beğenme/beğenmeme (Thumbs up/down) metriklerini toplayarak retrieval doğruluğunu sürekli izleme.
+- [ ] **Hybrid Search (BM25 + Dense Vector with Reciprocal Rank Fusion):**
+  - Merge semantic dense vector search with sparse keyword/code matching (BM25) via *Reciprocal Rank Fusion (RRF)* to achieve 100% precision on SKU codes and technical terminology.
+- [ ] **Complex Table & Unstructured Document Parsing:**
+  - Dedicated table segmentation and layout-aware chunking for Excel (`.xlsx`), CSV, and complex multi-column PDF reports.
+- [ ] **Hierarchical & Parent-Child Chunking:**
+  - Multi-tier indexing that performs granular vector search on small child chunks while providing parent contextual blocks to the LLM during generation.
+- [ ] **Graph-Augmented RAG (GraphRAG):**
+  - Transform enterprise entities and document relations into Knowledge Graphs for multi-hop causal reasoning and cross-departmental impact analysis.
 
 ---
 
-## ⚡ 3. Çıkarım Motoru & Performans Hızlandırma (Serving Optimization)
+## 🤖 2. Next-Gen Agentic RAG
 
-- [ ] **Optimize Çıkarım Motoru Entegrasyonu (vLLM / llama.cpp):**
-  - Sürekli batching (continuous batching) ve PagedAttention ile çoklu eşzamanlı isteklerde çıkarım hızını katlayarak artırma.
-- [ ] **Semantik Önbellekleme (Semantic Caching):**
-  - Daha önce sorulmuş benzer kurumsal soruları vektör benzerliğiyle önbelleğe alıp (Redis / GPTCache) sıfır GPU maliyetiyle anında yanıtlama.
-- [ ] **Spekülatif Kod Çözme (Speculative Decoding):**
-  - Küçük bir taslak model (draft model) kullanarak yerel LLM üretim hızını iki katına çıkarma.
+- [ ] **Multi-Turn Conversational Memory (LangGraph Checkpointer):**
+  - Integrate LangGraph Memory / SqliteSaver to persist conversation history and resolve references across multi-turn sessions.
+- [ ] **Dynamic Query Rewriting & Expansion:**
+  - Autonomous agent node to rewrite ambiguous user prompts into optimized search representations before querying the vector store.
+- [x] **Self-Correction & Refinement Loop:**
+  - Integrated `refine` node in LangGraph to prune unsupported claims from draft answers on complex queries without aborting into hard fallbacks.
+- [x] **Universal Relational Database Connector & Text-to-SQL Tools:**
+  - SQLAlchemy-based connector layer supporting PostgreSQL, MSSQL, MySQL, Oracle, and SQLite.
+  - Strict read-only query guardrails, automatic `LIMIT` capping, and table whitelisting.
+  - Table-to-vector ETL pipeline (`DatabaseTableLoader`) and agent tools (`sql_db_query`, `sql_db_schema`).
+- [ ] **Multi-Agent Supervisor Teams:**
+  - Supervisor pattern to route queries dynamically across specialized agents (Documentation Agent, SQL Data Agent, Mathematical Analyst).
+- [ ] **User Feedback Loop:**
+  - Thumbs up/down feedback widget in Streamlit UI to track and log answer ground truth metrics.
 
 ---
 
-## 🏢 4. Kurumsal Güvenlik, Uyumluluk & DevOps (Enterprise Readiness)
+## ⚡ 3. Serving Optimization & Inference Acceleration
 
-- [ ] **Rol Tabanlı Erişim Kontrolü (RBAC):**
-  - Kullanıcı ve departman (İK, Hukuk, Finans, Mühendislik) rollerine göre ChromaDB koleksiyon ve doküman seviyesinde yetkilendirme.
-- [ ] **Gözlemlenebilirlik & İzleme (Observability & Tracing):**
-  - Yanıt gecikmesi, token tüketimi ve arama isabetini analiz etmek için Langfuse, Arize Phoenix veya OpenTelemetry entegrasyonu.
-- [ ] **Tek Komutla Konteynerizasyon (Docker & NVIDIA Container Toolkit):**
-  - GPU geçişli Dockerfile ve Docker-Compose dosyaları ile sıfır konfigürasyonlu sunucu kurulumu.
-- [ ] **Kurumsal SSO & LDAP Entegrasyonu:**
-  - Active Directory, Keycloak ve Okta ile tek noktadan güvenli kurumsal oturum açma altyapısı.
+- [ ] **Optimized Inference Engine Integration (vLLM / llama.cpp):**
+  - Continuous batching and PagedAttention to maximize throughput and concurrency on GPU clusters.
+- [ ] **Semantic Vector Caching:**
+  - Cache recurring queries using vector similarity (Redis / GPTCache) to answer repeated enterprise questions with near-zero latency.
+- [ ] **Speculative Decoding:**
+  - Accelerate local LLM token generation using small draft models.
+
+---
+
+## 🏢 4. Enterprise Security, Governance & DevOps
+
+- [ ] **Role-Based Access Control (RBAC):**
+  - Enforce user and departmental permissions (HR, Legal, Finance, Engineering) at the ChromaDB collection and document levels.
+- [ ] **Observability & Tracing:**
+  - OpenTelemetry, Langfuse, or Arize Phoenix integration to trace latency, token consumption, and retrieval fidelity.
+- [ ] **One-Command Containerization (Docker & NVIDIA Container Toolkit):**
+  - Production-ready Dockerfile and docker-compose configurations with GPU passthrough for automated server provisioning.
+- [ ] **Enterprise SSO & Directory Integration:**
+  - SAML 2.0 / OAuth2 integration with Active Directory, Okta, and Keycloak for enterprise-grade authentication.

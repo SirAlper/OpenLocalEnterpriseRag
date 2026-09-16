@@ -6,26 +6,26 @@ from src.core.config import LLM_MODEL_NAME, USE_4BIT_QUANTIZATION
 
 
 def create_chat_model() -> ChatHuggingFace:
-    """Yerel Qwen modelini yükleyip LangChain ChatHuggingFace nesnesine dönüştürür.
+    """Load local Qwen model and wrap it into a LangChain ChatHuggingFace instance.
 
-    Dönen nesne standart LangChain ChatModel arayüzünü destekler:
-        - chat_model.invoke(messages)  → Toplu yanıt
-        - chat_model.stream(messages)  → Token bazlı canlı akış
-        - chat_model.bind_tools(tools) → Araç bağlama (ileride)
+    The returned object implements standard LangChain ChatModel interfaces:
+        - chat_model.invoke(messages)  -> Batch response
+        - chat_model.stream(messages)  -> Token stream
+        - chat_model.bind_tools(tools) -> Tool binding
     """
     is_cuda = torch.cuda.is_available()
     device_str = "CUDA GPU" if is_cuda else "CPU"
-    print(f"Yerel Dil Modeli ({LLM_MODEL_NAME}) {device_str} üzerinde yükleniyor...")
+    print(f"Loading local LLM ({LLM_MODEL_NAME}) on {device_str}...")
 
     is_local = os.path.exists(LLM_MODEL_NAME)
     tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_NAME, local_files_only=is_local)
 
-    # PyTorch 4-bit Kuantizasyon & Bellek Optimizasyonu
+    # PyTorch 4-bit Quantization & Memory Optimization
     quantization_config = None
     torch_dtype = torch.bfloat16 if is_cuda else torch.float32
 
     if is_cuda and USE_4BIT_QUANTIZATION:
-        print("[PyTorch] 4-bit (NF4) Kuantizasyon aktif ediliyor...")
+        print("[PyTorch] Enabling 4-bit (NF4) quantization...")
         quantization_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
@@ -45,8 +45,8 @@ def create_chat_model() -> ChatHuggingFace:
 
     model = AutoModelForCausalLM.from_pretrained(LLM_MODEL_NAME, **model_kwargs)
 
-    # HuggingFace Pipeline → LangChain ChatModel dönüşümü
-    print("[LangChain] HuggingFace Pipeline oluşturuluyor...")
+    # HuggingFace Pipeline -> LangChain ChatModel conversion
+    print("[LangChain] Creating HuggingFace Pipeline...")
     pipe = pipeline(
         "text-generation",
         model=model,
@@ -58,6 +58,6 @@ def create_chat_model() -> ChatHuggingFace:
     )
     hf_llm = HuggingFacePipeline(pipeline=pipe)
     chat_model = ChatHuggingFace(llm=hf_llm)
-    print("[LangChain] ChatHuggingFace modeli başarıyla oluşturuldu.")
+    print("[LangChain] ChatHuggingFace model initialized successfully.")
 
     return chat_model

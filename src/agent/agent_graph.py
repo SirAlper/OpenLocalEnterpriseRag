@@ -17,7 +17,7 @@ class AgentState(TypedDict):
 
 
 class EnterpriseRAGAgent:
-    """LangGraph iş akışını oluşturan ve sorgu servisini başlatan orkestratör sınıf."""
+    """Orchestrator class that sets up the LangGraph workflow and initializes the query service."""
 
     def __init__(self, rag_engine: RAGEngine):
         self.rag_engine = rag_engine
@@ -27,7 +27,7 @@ class EnterpriseRAGAgent:
         self.service = QueryService(self.app, self.nodes, self.chat_model)
 
     def _build_graph(self):
-        """LangGraph durum grafını yapılandırır ve derler."""
+        """Configure and compile the LangGraph state workflow."""
         workflow = StateGraph(AgentState)
 
         workflow.add_node("retrieve", self.nodes.retrieve)
@@ -49,17 +49,16 @@ class EnterpriseRAGAgent:
 
         return workflow.compile()
 
-
-    # ──────────────────────────── SORGU SERVİSİ KÖPRÜLERİ ────────────────────────────
+    # ──────────────────────────── QUERY SERVICE BRIDGES ────────────────────────────
 
     def query(self, question: str) -> dict:
-        """Toplu (batch) sorgu çalıştırma."""
+        """Run batch query through the LangGraph workflow."""
         return self.service.query(question)
 
     def stream_events(self, question: str):
-        """Durum, kaynak ve token bazlı canlı akış."""
+        """Stream stage status events and final answer."""
         return self.service.stream_events(question)
 
     def stream_query(self, question: str):
-        """Yalnızca metin token akışı."""
+        """Stream final answer upon completion."""
         return self.service.stream_query(question)

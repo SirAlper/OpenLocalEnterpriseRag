@@ -6,18 +6,20 @@ from src.core.config import EMBEDDING_MODEL_NAME, RERANKER_MODEL_NAME, VECTOR_DB
 
 
 class RAGEngine:
+    """Two-Stage Retrieval Engine combining Bi-Encoder vector search with Cross-Encoder reranking."""
+
     def __init__(self):
         device = RAG_DEVICE
-        print(f"[RAG Engine] Embedding ve Reranker '{device}' üzerinde çalıştırılıyor...")
+        print(f"[RAG Engine] Running Embedding and Reranker on '{device}'...")
 
-        # Çok Dilli Embedding Modeli (BAAI/bge-m3)
+        # Multilingual Embedding Model (BAAI/bge-m3)
         is_local_embed = os.path.exists(EMBEDDING_MODEL_NAME)
-        print(f"Çok Dilli Embedding Modeli ({EMBEDDING_MODEL_NAME.split(os.sep)[-1]}) yükleniyor...")
+        print(f"Loading Embedding Model ({EMBEDDING_MODEL_NAME.split(os.sep)[-1]})...")
         self.embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME, device=device, local_files_only=is_local_embed)
 
-        # Reranker Modeli (BAAI/bge-reranker-v2-m3)
+        # Cross-Encoder Reranker Model (BAAI/bge-reranker-v2-m3)
         is_local_reranker = os.path.exists(RERANKER_MODEL_NAME)
-        print(f"Reranker Modeli ({RERANKER_MODEL_NAME.split(os.sep)[-1]}) yükleniyor...")
+        print(f"Loading Reranker Model ({RERANKER_MODEL_NAME.split(os.sep)[-1]})...")
         self.reranker = CrossEncoder(
             RERANKER_MODEL_NAME,
             max_length=512,
@@ -25,14 +27,14 @@ class RAGEngine:
             local_files_only=is_local_reranker
         )
 
-        print("Yerel Vektör Veritabanı (ChromaDB) başlatılıyor...")
+        print("Initializing local vector store (ChromaDB)...")
         self.client = chromadb.PersistentClient(path=VECTOR_DB_PATH)
         self.collection = self.client.get_or_create_collection(name="enterprise_docs")
 
     def add_documents(self, documents: list[str], ids: list[str], metadatas: list[dict] = None):
-        """Yeni belgeleri vektörleştirip veritabanına ekler."""
+        """Vectorize new document chunks and store them in ChromaDB."""
         if not documents:
-            print("Eklenecek belge bulunamadı.")
+            print("[RAG Engine] No documents to add.")
             return
 
         embeddings = self.embedding_model.encode(documents, show_progress_bar=True).tolist()
@@ -43,24 +45,24 @@ class RAGEngine:
             ids=ids,
             metadatas=metadatas
         )
-        print(f"Toplam {len(documents)} parça başarıyla indekslendi.")
+        print(f"[RAG Engine] Successfully indexed {len(documents)} chunks.")
 
     def delete_document(self, filename: str) -> int:
-        """Belirtilen kaynağa ait tüm parçaları ChromaDB'den siler."""
+        """Delete all chunks belonging to the specified file from ChromaDB."""
         try:
             results = self.collection.get(where={"source": filename})
             ids = results.get("ids", [])
             if ids:
                 self.collection.delete(ids=ids)
-                print(f"'{filename}' dosyasına ait {len(ids)} parça ChromaDB'den silindi.")
+                print(f"[RAG Engine] Deleted {len(ids)} chunks belonging to '{filename}'.")
                 return len(ids)
             return 0
         except Exception as e:
-            print(f"Silme işlemi sırasında hata: {e}")
+            print(f"[RAG Engine] Error during chunk deletion: {e}")
             return 0
 
     def get_stats(self) -> dict:
-        """Vektör veri tabanındaki genel istatistikleri döner."""
+        """Return general index statistics from the vector store."""
         total_chunks = self.collection.count()
         all_data = self.collection.get(include=["metadatas"])
         metadatas = all_data.get("metadatas", []) or []
@@ -78,18 +80,17 @@ class RAGEngine:
         }
 
     def search(self, query: str, n_results: int = 10, max_distance: float = 1.35) -> dict:
-        """Soruya en yakın şirket belgelerini bulur ve Reranker ile yeniden sıralayarak en alakalı parçaları döner.
+        """Retrieve most relevant document chunks and rerank them with Cross-Encoder.
 
-        Arama Akışı:
-        1. ChromaDB'den geniş aday havuzu çek (n_results=10).
-        2. max_distance eşiğiyle ilk filtrelemeyi yap.
-        3. Kalan adayları CrossEncoder (Reranker) ile soru-belge çifti olarak puanla.
-        4. En yüksek puanlı RERANKER_TOP_N parçayı döndür.
+        Retrieval Workflow:
+        1. Query ChromaDB for candidate pool (n_results=10).
+        2. Filter out candidates exceeding max_distance threshold.
+        3. Score remaining candidates with Cross-Encoder [Query, Chunk] pairs.
+        4. Return top RERANKER_TOP_N chunks as verified context.
         """
         if self.collection.count() == 0:
             return {"context": "", "sources": []}
 
-        # İstenen n_results, toplam parça sayısından fazla olamaz
         actual_n = min(n_results, self.collection.count())
         q_embedding = self.embedding_model.encode(query).tolist()
         results = self.collection.query(
@@ -106,7 +107,7 @@ class RAGEngine:
         metadatas = metas_list[0] if metas_list else []
         distances = dists_list[0] if dists_list else []
 
-        # 1. Mesafe eşiğiyle ilk filtreleme
+        # 1. Distance threshold filtering
         candidates = []
         for doc_text, meta, dist in zip(retrieved_docs, metadatas, distances):
             dist_val = round(float(dist), 4) if dist is not None else None
@@ -123,7 +124,7 @@ class RAGEngine:
         if not candidates:
             return {"context": "", "sources": []}
 
-        # 2. Reranker ile yeniden puanlama
+        # 2. Cross-Encoder reranking
         pairs = [[query, c["doc_text"]] for c in candidates]
         reranker_scores = self.reranker.predict(pairs)
         if hasattr(reranker_scores, "tolist"):
@@ -134,7 +135,7 @@ class RAGEngine:
         for candidate, score in zip(candidates, reranker_scores):
             candidate["reranker_score"] = round(float(score), 4)
 
-        # 3. Reranker skoruna göre sırala ve en iyi RERANKER_TOP_N parçayı seç
+        # 3. Sort by reranker score and pick top RERANKER_TOP_N
         candidates.sort(key=lambda x: x["reranker_score"], reverse=True)
         top_candidates = candidates[:RERANKER_TOP_N]
 
@@ -144,7 +145,7 @@ class RAGEngine:
             filtered_docs.append(c["doc_text"])
             meta = c["meta"]
             sources.append({
-                "source": meta.get("source", "Bilinmeyen Belge") if meta else "Bilinmeyen Belge",
+                "source": meta.get("source", "Unknown Document") if meta else "Unknown Document",
                 "chunk_index": meta.get("chunk_index", 0) if meta else 0,
                 "content": c["doc_text"],
                 "distance": c["distance"],

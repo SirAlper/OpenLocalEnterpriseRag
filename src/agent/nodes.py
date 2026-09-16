@@ -8,21 +8,21 @@ from src.agent.prompts import (
 
 
 class AgentNodes:
-    """LangGraph düğüm fonksiyonlarını barındıran sınıf.
+    """Class containing LangGraph node functions.
 
-    Her düğüm metodu LangGraph'ın beklediği (state) -> dict imzasına sahiptir.
+    Each node method follows the standard LangGraph signature: (state: dict) -> dict.
     """
 
     def __init__(self, chat_model: ChatHuggingFace, rag_engine: RAGEngine):
         self.chat_model = chat_model
         self.rag_engine = rag_engine
 
-    # ──────────────────────────── UZMAN DÜĞÜMLER ────────────────────────────
+    # ──────────────────────────── WORKFLOW NODES ────────────────────────────
 
     def retrieve(self, state: dict) -> dict:
-        """Vektör veritabanından en alakalı belge parçalarını arar."""
+        """Search vector database and reranker for the most relevant document chunks."""
         question = state["question"].strip()
-        print(f"[LangGraph Node: retrieve] Belgeler aranıyor: '{question}'...")
+        print(f"[LangGraph Node: retrieve] Searching documents for: '{question}'...")
         search_result = self.rag_engine.search(question)
         return {
             "context": search_result.get("context", ""),
@@ -30,8 +30,8 @@ class AgentNodes:
         }
 
     def generate(self, state: dict) -> dict:
-        """ChatHuggingFace ile kurumsal yanıt üretir."""
-        print("[LangGraph Node: generate] Yanıt üretiliyor...")
+        """Generate enterprise RAG response using ChatHuggingFace."""
+        print("[LangGraph Node: generate] Generating response...")
         context = state.get("context", "").strip()
         if not context:
             return {"answer": NO_CONTEXT_RESPONSE}
@@ -41,21 +41,21 @@ class AgentNodes:
         return {"answer": response.content.strip()}
 
     def grade_hallucination(self, state: dict) -> dict:
-        """Üretilen yanıtın bağlama sadakatini denetler."""
-        print("[LangGraph Node: grade] Halüsinasyon denetimi yapılıyor...")
+        """Audit the fidelity of the generated answer against the retrieved context."""
+        print("[LangGraph Node: grade] Auditing answer for hallucinations...")
         context = state.get("context", "").strip()
         if not context:
-            return {"hallucination_grade": "evet"}
+            return {"hallucination_grade": "yes"}
 
         messages = build_grader_messages(context, state["question"], state.get("answer", ""))
         response = self.chat_model.invoke(messages)
         grade = response.content.strip()
-        print(f"Hallucination denetim sonucu: {grade}")
+        print(f"[LangGraph Node: grade] Audit result: '{grade}'")
         return {"hallucination_grade": grade}
 
     def refine(self, state: dict) -> dict:
-        """Halüsinasyon tespit edilen veya şüpheli yanıtı bağlama göre budar ve yeniden düzenler."""
-        print("[LangGraph Node: refine] Yanıt bağlama sadık kalınarak yeniden düşünülüyor ve düzeltiliyor...")
+        """Prune and re-evaluate draft answers that contain unverified or speculative statements."""
+        print("[LangGraph Node: refine] Rethinking and refining response to match context...")
         context = state.get("context", "").strip()
         question = state.get("question", "").strip()
         draft_answer = state.get("answer", "").strip()
@@ -66,7 +66,7 @@ class AgentNodes:
         messages = build_refine_messages(context, question, draft_answer)
         response = self.chat_model.invoke(messages)
         refined_answer = response.content.strip()
-        print("[LangGraph Node: refine] Yanıt başarıyla revize edildi.")
+        print("[LangGraph Node: refine] Response successfully refined.")
 
         return {
             "answer": refined_answer,
@@ -75,24 +75,23 @@ class AgentNodes:
         }
 
     def fallback(self, state: dict) -> dict:
-        """Halüsinasyon tespit edildiğinde güvenli yanıt döner."""
-        print("[LangGraph Node: fallback] Güvenli fallback devreye girdi!")
+        """Provide a safe fallback answer when factual consistency cannot be verified."""
+        print("[LangGraph Node: fallback] Safe fallback triggered!")
         return {"answer": FALLBACK_RESPONSE}
 
-    # ──────────────────────────── KARAR FONKSİYONLARI ────────────────────────────
+    # ──────────────────────────── CONDITIONAL EDGES ────────────────────────────
 
     @staticmethod
     def decide_hallucinate(state: dict) -> Literal["end", "refine", "fallback"]:
         grade = str(state.get("hallucination_grade", "")).strip().lower()
-        is_passed = "evet" in grade or "yes" in grade
+        is_passed = "yes" in grade or "evet" in grade
         if is_passed:
             return "end"
 
-        # Eğer daha önce düzeltilmediyse (retry_count < 1) refine düğümüne yönlendir
+        # If not refined previously (retry_count < 1), route to refine node
         if state.get("retry_count", 0) < 1:
-            print("[LangGraph Decision] Hallucination şüphesi: Yanıt refine (düzeltme) düğümüne aktarılıyor.")
+            print("[LangGraph Decision] Hallucination suspected: Routing to refine node.")
             return "refine"
 
-        print("[LangGraph Decision] Maksimum deneme aşıldı: Fallback düğümüne aktarılıyor.")
+        print("[LangGraph Decision] Max retries reached: Routing to fallback node.")
         return "fallback"
-

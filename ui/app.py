@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Stil özelleştirmeleri
+# Custom styling
 st.markdown("""
 <style>
     .main-header {
@@ -43,7 +43,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# API Yardımcı Fonksiyonları
+# API Helper Functions
 def fetch_stats():
     try:
         res = requests.get(f"{API_BASE_URL}/api/v1/stats", timeout=5)
@@ -68,7 +68,7 @@ def upload_document(uploaded_file):
     try:
         files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
         res = requests.post(f"{API_BASE_URL}/api/v1/upload-file", files=files, timeout=60)
-        return res.status_code == 200, res.json().get("message", "Bilinmeyen yanıt.")
+        return res.status_code == 200, res.json().get("message", "Unknown response.")
     except Exception as e:
         return False, str(e)
 
@@ -76,7 +76,7 @@ def upload_document(uploaded_file):
 def delete_document_api(filename):
     try:
         res = requests.delete(f"{API_BASE_URL}/api/v1/documents/{filename}", timeout=10)
-        return res.status_code == 200, res.json().get("message", "Silindi.")
+        return res.status_code == 200, res.json().get("message", "Deleted.")
     except Exception as e:
         return False, str(e)
 
@@ -94,7 +94,7 @@ def fetch_database_status():
 def sync_table_api(table_name):
     try:
         res = requests.post(f"{API_BASE_URL}/api/v1/database/sync-table", json={"table_name": table_name}, timeout=60)
-        return res.status_code == 200, res.json().get("message", "İşlem tamamlandı.")
+        return res.status_code == 200, res.json().get("message", "Operation completed.")
     except Exception as e:
         return False, str(e)
 
@@ -108,128 +108,99 @@ def query_rag_api(question):
         )
         if res.status_code == 200:
             return res.json()
-        return {"status": "error", "answer": f"Hata oluştu: {res.text}", "sources": []}
+        return {"status": "error", "answer": f"Error: {res.text}", "sources": []}
     except Exception as e:
-        return {"status": "error", "answer": f"API Bağlantı Hatası: {e}", "sources": []}
+        return {"status": "error", "answer": f"API Connection Error: {e}", "sources": []}
 
 
-def stream_rag_api(question):
-    """FastAPI canlı akış endpoint'inden token ve kaynak verilerini çeker."""
-    try:
-        with requests.post(
-            f"{API_BASE_URL}/api/v1/query-stream",
-            json={"question": question},
-            stream=True,
-            timeout=180
-        ) as res:
-            if res.status_code == 200:
-                for line in res.iter_lines(decode_unicode=True):
-                    if line:
-                        try:
-                            yield json.loads(line)
-                        except Exception:
-                            continue
-            else:
-                yield {"type": "token", "token": f"Hata oluştu: {res.text}"}
-    except Exception as e:
-        yield {"type": "token", "token": f"API Bağlantı Hatası: {e}"}
-
-
-# --- OTURUM DURUMU (SESSION STATE) ---
+# --- SESSION STATE INITIALIZATION ---
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "Merhaba! Ben yerel kurumsal yapay zeka asistanınızım. Şirket içi belgelerinizle ilgili sorularınızı yanıtlayabilirim.",
+            "content": "Hello! I am your enterprise local AI assistant. I can answer questions grounded strictly in your internal documents and connected databases.",
             "sources": []
         }
     ]
 
-# Durdur butonu tetiklendiyse son asistan yanıtını durduruldu olarak işaretle
-for key in list(st.session_state.keys()):
-    if key.startswith("stop_") and st.session_state.get(key):
-        if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
-            st.session_state.messages[-1]["stopped"] = True
-        st.session_state[key] = False
 
-
-# --- SOL YAN PANEL (SIDEBAR) ---
+# --- SIDEBAR (CONTROL PANEL) ---
 with st.sidebar:
-    st.title("⚙️ Yönetim Paneli")
+    st.title("⚙️ Control Panel")
 
-    # 1. Sistem Durumu
+    # 1. System Status
     stats = fetch_stats()
     if stats:
-        st.success("🟢 API Bağlantısı Aktif")
-        st.markdown(f"**Cihaz:** `{stats.get('device', 'Bilinmiyor')}`")
+        st.success("🟢 API Connected")
+        st.markdown(f"**Device:** `{stats.get('device', 'Unknown')}`")
         st.markdown(f"**Model:** `{stats.get('llm_model', '').split('/')[-1]}`")
-        
+
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("Toplam Belge", stats.get("total_documents", 0))
+            st.metric("Total Documents", stats.get("total_documents", 0))
         with col2:
-            st.metric("Vektör Parçası", stats.get("total_chunks", 0))
+            st.metric("Vector Chunks", stats.get("total_chunks", 0))
     else:
-        st.error("🔴 API Çevrimdışı (FastAPI başlatılmamış)")
-        st.info("Terminalde: `uvicorn src.main:app --reload` komutunu çalıştırın.")
+        st.error("🔴 API Offline (FastAPI server not reachable)")
+        st.info("Start backend in terminal: `uvicorn src.main:app --reload`")
 
     st.divider()
 
-    # 2. Belge Yükleme
-    st.subheader("📤 Belge Yükle")
+    # 2. Document Upload
+    st.subheader("📤 Upload Document")
     uploaded_file = st.file_uploader(
-        "PDF, Word veya Metin belgesi seçin",
+        "Choose a PDF, Word, or TXT file",
         type=["pdf", "docx", "txt"],
-        help="Yüklenen dosya otomatik olarak parçalanıp ChromaDB'ye kaydedilir."
+        help="Uploaded files are automatically parsed, contextualized, and indexed into ChromaDB."
     )
     if uploaded_file is not None:
-        if st.button("🚀 Yükle ve İndeksle", use_container_width=True):
-            with st.spinner("Belge ayrıştırılıyor ve vektörleştiriliyor..."):
+        if st.button("🚀 Upload and Index", use_container_width=True):
+            with st.spinner("Parsing and vectorizing document..."):
                 success, msg = upload_document(uploaded_file)
                 if success:
                     st.success(msg)
                     st.rerun()
                 else:
-                    st.error(f"Yükleme hatası: {msg}")
+                    st.error(f"Upload failed: {msg}")
 
     st.divider()
 
-    # 3. Yüklü Belgeler Listesi & Silme
-    st.subheader("📚 İndekslenmiş Belgeler")
+    # 3. Indexed Documents List & Deletion
+    st.subheader("📚 Indexed Documents")
     docs = fetch_documents()
     if docs:
         for doc in docs:
             col_info, col_del = st.columns([4, 1])
             with col_info:
-                st.markdown(f"**{doc['filename']}**  \n<small>{doc['size_kb']} KB | {doc['chunk_count']} parça</small>", unsafe_allow_html=True)
+                st.markdown(f"**{doc['filename']}**  \n<small>{doc['size_kb']} KB | {doc['chunk_count']} chunks</small>", unsafe_allow_html=True)
             with col_del:
-                if st.button("🗑️", key=f"del_{doc['filename']}", help=f"'{doc['filename']}' dosyasını sil"):
+                if st.button("🗑️", key=f"del_{doc['filename']}", help=f"Delete '{doc['filename']}'"):
                     success, msg = delete_document_api(doc['filename'])
                     if success:
-                        st.toast(f"'{doc['filename']}' silindi!", icon="🗑️")
+                        st.toast(f"'{doc['filename']}' deleted!", icon="🗑️")
                         st.rerun()
                     else:
                         st.error(msg)
             st.write("---")
     else:
-        st.caption("Henüz yüklenmiş bir belge bulunmuyor.")
+        st.caption("No indexed documents found.")
 
     st.divider()
 
-    # 4. Veritabanı Yönetimi (SQLAlchemy Evrensel Bağlayıcı)
-    st.subheader("🗄️ Veritabanı")
+    # 4. Database Management (SQLAlchemy Universal Connector)
+    st.subheader("🗄️ Database")
     db_data = fetch_database_status()
     if db_data and db_data.get("connection", {}).get("status") == "connected":
         conn = db_data["connection"]
         dialect = conn.get("dialect", "").upper()
         tables = conn.get("tables", [])
-        st.success(f"🟢 **{dialect}** Bağlantısı Aktif")
-        st.caption(f"Erişilebilir Tablolar: {len(tables)} adet")
+        st.success(f"🟢 **{dialect}** Connected")
+        st.caption(f"Accessible Tables: {len(tables)}")
 
         if tables:
-            selected_table = st.selectbox("Vektörleştirilecek Tablo", tables)
-            if st.button("🔄 Tabloyu Vektörleştir", key="sync_table_btn", use_container_width=True):
-                with st.spinner(f"'{selected_table}' tablosu vektörleştiriliyor..."):
+            selected_table = st.selectbox("Select Table to Vectorize", tables)
+            if st.button("🔄 Vectorize Table", key="sync_table_btn", use_container_width=True):
+                with st.spinner(f"Vectorizing table '{selected_table}'..."):
                     success, msg = sync_table_api(selected_table)
                     if success:
                         st.toast(msg, icon="✅")
@@ -237,91 +208,91 @@ with st.sidebar:
                     else:
                         st.error(msg)
 
-            with st.expander("🔍 Tablo Şemasını İncele"):
-                st.code(db_data.get("schema_summary", "Şema bulunamadı."), language="text")
+            with st.expander("🔍 Inspect Database Schema"):
+                st.code(db_data.get("schema_summary", "Schema unavailable."), language="text")
     elif db_data and db_data.get("connection", {}).get("status") == "not_configured":
-        st.caption("⚪ Veritabanı Yapılandırılmadı")
-        st.info("İsteğe bağlı: `.env` dosyasında `DATABASE_URL` tanımlayarak PostgreSQL, MSSQL, MySQL veya SQLite bağlayabilirsiniz.")
+        st.caption("⚪ Database Not Configured")
+        st.info("Optional: Set DATABASE_URL in .env to connect PostgreSQL, MSSQL, MySQL, Oracle, or SQLite.")
     else:
-        st.caption("⚪ Veritabanı Çevrimdışı")
+        st.caption("⚪ Database Offline")
 
     st.divider()
-    if st.button("🧹 Sohbeti Temizle", use_container_width=True):
+    if st.button("🧹 Clear Conversation", use_container_width=True):
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": "Sohbet geçmişi temizlendi. Yeni sorularınızı bekliyorum!",
+                "content": "Conversation history cleared. Ready for new questions!",
                 "sources": []
             }
         ]
         st.rerun()
 
 
-# --- ANA PANEL (CHAT) ---
+# --- MAIN PANEL (CHAT) ---
 st.markdown('<div class="main-header">🏢 Enterprise Local RAG Assistant</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Tamamen yerel donanımda çalışan, veri sızıntısı riski olmayan kurumsal yapay zeka asistanı.</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Zero-leakage, on-premise generative AI assistant running 100% locally on your infrastructure.</div>', unsafe_allow_html=True)
 
-# Mesaj Geçmişini Ekrana Bas
+# Render Message History
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-        # Doğruluk ve Düzeltme denetimi rozeti
+        # Audit & Verification Badges
         if msg.get("is_refined") is True:
-            st.caption("✍️ *LangGraph Denetimi: Yanıt şirket belgelerine göre yeniden değerlendirilip sadeleştirildi.*")
+            st.caption("✍️ *LangGraph Audit: Response re-evaluated and refined according to company documents.*")
         elif msg.get("verified") is True and msg.get("sources"):
-            st.caption("🛡️ *LangGraph Denetimi: Şirket belgeleriyle birebir doğrulandı.*")
+            st.caption("🛡️ *LangGraph Audit: Verified directly against company documents.*")
         elif msg.get("verified") is False and msg.get("sources"):
-            st.caption("⚠️ *LangGraph Denetimi: Belgelerle tam doğrulanamadı.*")
+            st.caption("⚠️ *LangGraph Audit: Could not be fully verified against company documents.*")
 
-        # Referans alınan kaynaklar varsa expander içinde göster
+        # Render Referenced Sources
         if msg.get("sources"):
-            with st.expander(f"📚 Referans Alınan Kaynaklar ({len(msg['sources'])} Parça)"):
+            with st.expander(f"📚 Referenced Sources ({len(msg['sources'])} Chunks)"):
                 for idx, src in enumerate(msg["sources"], 1):
-                    distance_info = f" (Mesafe: {src['distance']})" if src.get("distance") is not None else ""
-                    st.markdown(f"**{idx}. 📄 `{src['source']}` — Parça #{src['chunk_index']}{distance_info}**")
+                    distance_info = f" (Distance: {src['distance']})" if src.get("distance") is not None else ""
+                    st.markdown(f"**{idx}. 📄 `{src['source']}` — Chunk #{src['chunk_index']}{distance_info}**")
                     st.markdown(f"> *\"{src['content'].strip()}\"*")
                     st.write("")
 
-# Yeni Kullanıcı Sorusu
-if prompt := st.chat_input("Şirket belgeleriniz hakkında bir soru sorun (ör. 'Yıllık izin politikamız nedir?')..."):
-    # Kullanıcı mesajını ekle ve ekrana bas
+# User Input
+if prompt := st.chat_input("Ask a question about your enterprise documents (e.g., 'What is our annual leave policy?')..."):
+    # Append user message
     st.session_state.messages.append({"role": "user", "content": prompt, "sources": []})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Modelden yanıt al (Düşünme/Yazıyor İkonu ile Toplu Yanıt)
+    # Query Backend with Thinking Spinner
     with st.chat_message("assistant"):
-        with st.spinner("💭 Yanıt hazırlanıyor ve şirket belgeleri inceleniyor..."):
+        with st.spinner("💭 Thinking and reviewing enterprise documents..."):
             res = query_rag_api(prompt)
 
-        answer = res.get("answer", "Yanıt alınamadı.")
+        answer = res.get("answer", "No response received.")
         sources = res.get("sources", [])
         is_refined = res.get("is_refined", False)
         grade = str(res.get("hallucination_grade", "")).strip().lower()
         is_verified = ("evet" in grade or "yes" in grade) or is_refined
 
-        # Yanıtı tek seferde eksiksiz ekrana bas
+        # Render complete answer
         st.markdown(answer)
 
-        # Doğruluk veya Düzeltme rozeti
+        # Audit Badges
         if is_refined:
-            st.caption("✍️ *LangGraph Denetimi: Yanıt şirket belgelerine göre yeniden değerlendirilip sadeleştirildi.*")
+            st.caption("✍️ *LangGraph Audit: Response re-evaluated and refined according to company documents.*")
         elif is_verified and sources:
-            st.caption("🛡️ *LangGraph Denetimi: Şirket belgeleriyle birebir doğrulandı.*")
+            st.caption("🛡️ *LangGraph Audit: Verified directly against company documents.*")
         elif not is_verified and sources:
-            st.caption("⚠️ *LangGraph Denetimi: Belgelerle tam doğrulanamadı.*")
+            st.caption("⚠️ *LangGraph Audit: Could not be fully verified against company documents.*")
 
-        # Kaynakları göster
+        # Referenced Sources
         if sources:
-            with st.expander(f"📚 Referans Alınan Kaynaklar ({len(sources)} Parça)"):
+            with st.expander(f"📚 Referenced Sources ({len(sources)} Chunks)"):
                 for idx, src in enumerate(sources, 1):
-                    distance_info = f" (Mesafe: {src['distance']})" if src.get("distance") is not None else ""
-                    st.markdown(f"**{idx}. 📄 `{src['source']}` — Parça #{src['chunk_index']}{distance_info}**")
+                    distance_info = f" (Distance: {src['distance']})" if src.get("distance") is not None else ""
+                    st.markdown(f"**{idx}. 📄 `{src['source']}` — Chunk #{src['chunk_index']}{distance_info}**")
                     st.markdown(f"> *\"{src['content'].strip()}\"*")
                     st.write("")
 
-        # Mesajı oturum geçmişine kaydet
+        # Save to session history
         st.session_state.messages.append({
             "role": "assistant",
             "content": answer,
@@ -329,4 +300,3 @@ if prompt := st.chat_input("Şirket belgeleriniz hakkında bir soru sorun (ör. 
             "verified": is_verified,
             "is_refined": is_refined
         })
-

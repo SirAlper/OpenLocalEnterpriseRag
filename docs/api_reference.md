@@ -1,37 +1,37 @@
-# 🔌 REST API Dokümantasyonu
+# 🔌 REST API Documentation
 
-`OpenLocalEnterpriseRag`, kurumsal ERP, CRM veya web portallarıyla kolayca entegre olabilmesi için **FastAPI** tabanlı yüksek performanslı bir REST API sunar.
+`OpenLocalEnterpriseRag` exposes a high-performance REST API built on **FastAPI** to enable turnkey integration with enterprise portals, CRM, ERP, and internal workplace bots.
 
-Tüm uç noktaların etkileşimli Swagger dokümantasyonuna sunucu çalışırken `http://localhost:8000/docs` adresinden erişilebilir.
+The interactive OpenAPI Swagger UI is available at `http://localhost:8000/docs` whenever the server is running.
 
 ---
 
-## 📋 Uç Noktalar Listesi
+## 📋 Endpoints Overview
 
-| Metot | Uç Nokta | Açıklama |
+| Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/v1/stats` | Donanım (CUDA/CPU), model ve indeks istatistikleri |
-| `GET` | `/api/v1/documents` | İndekslenmiş ve yüklü şirket belgelerini listeleme |
-| `POST` | `/api/v1/upload-file` | Yeni PDF, DOCX veya TXT belgesi yükleme ve indeksleme |
-| `DELETE` | `/api/v1/documents/{filename}` | Belgeyi diskten ve vektör veritabanından kalıcı silme |
-| `POST` | `/api/v1/query` | Toplu (Batch) soru-cevap, referans kaynaklar ve doğrulama sonucu |
-| `POST` | `/api/v1/query-stream` | Durum ve aşama adımları (NDJSON event stream) ile yanıt alma |
-| `GET` | `/api/v1/database/status` | Veritabanı bağlantı durumu, türü ve şema özeti |
-| `POST` | `/api/v1/database/test-query` | Güvenli salt-okunur SQL çalıştırma |
-| `POST` | `/api/v1/database/sync-table` | Veritabanı tablosunu ChromaDB vektör indeksine aktarma |
+| `GET` | `/api/v1/stats` | Hardware (CUDA/CPU), model paths, and vector store statistics |
+| `GET` | `/api/v1/documents` | List uploaded and indexed enterprise documents |
+| `POST` | `/api/v1/upload-file` | Upload new PDF, DOCX, or TXT document and auto-index |
+| `DELETE` | `/api/v1/documents/{filename}` | Permanently delete document from disk and vector store |
+| `POST` | `/api/v1/query` | Batch question answering with verified sources and audit state |
+| `POST` | `/api/v1/query-stream` | Stage event streaming (NDJSON protocol) with final answer |
+| `GET` | `/api/v1/database/status` | Database connection status, dialect type, and schema summary |
+| `POST` | `/api/v1/database/test-query` | Execute safe read-only SELECT queries |
+| `POST` | `/api/v1/database/sync-table` | Convert database table into ChromaDB vector chunks |
 
 ---
 
-## 📖 Uç Nokta Detayları ve cURL Örnekleri
+## 📖 Endpoint Details & cURL Examples
 
-### 1. Sistem İstatistikleri (`GET /api/v1/stats`)
-Sistem donanımını, kullanılan modelleri, belge ve parça sayılarını ve veritabanı durumunu döner.
+### 1. System Statistics (`GET /api/v1/stats`)
+Returns hardware acceleration status, active embedding/LLM paths, and document counts.
 
 ```bash
 curl -X GET "http://localhost:8000/api/v1/stats"
 ```
 
-**Örnek Yanıt:**
+**Example Response:**
 ```json
 {
   "status": "success",
@@ -50,27 +50,27 @@ curl -X GET "http://localhost:8000/api/v1/stats"
 
 ---
 
-### 2. Belge Yükleme (`POST /api/v1/upload-file`)
-Multipart/form-data ile gönderilen dosyayı `data/` klasörüne kaydeder, bağlamsal başlık enjekte ederek parçalar ve ChromaDB'ye ekler.
+### 2. Document Upload (`POST /api/v1/upload-file`)
+Accepts multipart/form-data upload, saves the file to `data/`, generates contextual chunks, and stores embeddings in ChromaDB.
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/upload-file" \
-     -F "file=@NovaTech_Guvenlik_Politikasi.pdf"
+     -F "file=@NovaTech_Security_Policy.pdf"
 ```
 
 ---
 
-### 3. Belge Silme (`DELETE /api/v1/documents/{filename}`)
-Belirtilen dosyayı hem `data/` dizininden hem de ChromaDB koleksiyonundan tamamen siler.
+### 3. Document Deletion (`DELETE /api/v1/documents/{filename}`)
+Permanently deletes the file from `data/` and purges its chunks from ChromaDB.
 
 ```bash
-curl -X DELETE "http://localhost:8000/api/v1/documents/NovaTech_Guvenlik_Politikasi.pdf"
+curl -X DELETE "http://localhost:8000/api/v1/documents/NovaTech_Security_Policy.pdf"
 ```
 
 ---
 
-### 4. Soru Sorma - Toplu Yanıt (`POST /api/v1/query`)
-İndekslenmiş kurumsal veriler üzerinden yanıt, referans kaynak alıntıları ve denetim sonucunu döner.
+### 4. Query Assistant - Batch (`POST /api/v1/query`)
+Executes the LangGraph workflow, returning the verified Turkish answer, reference sources, and refinement flags.
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/query" \
@@ -80,29 +80,29 @@ curl -X POST "http://localhost:8000/api/v1/query" \
      }'
 ```
 
-**Örnek Yanıt:**
+**Example Response:**
 ```json
 {
   "status": "success",
   "answer": "Şirket bilgi güvenliği politikası gereğince parolalar en az 90 günde bir güncellenmelidir.",
   "sources": [
     {
-      "source": "NovaTech_Guvenlik_Politikasi.pdf",
+      "source": "NovaTech_Security_Policy.pdf",
       "chunk_index": 2,
-      "content": "[Belge: NovaTech Bilgi Güvenliği | KOD: SEC-04]\nMadde 3: Kullanıcı parolaları 90 günde bir...",
+      "content": "[Document: NovaTech Information Security | CODE: SEC-04]\nClause 3: User passwords must be updated every 90 days...",
       "distance": 0.421,
       "reranker_score": 4.812
     }
   ],
-  "hallucination_grade": "evet",
+  "hallucination_grade": "yes",
   "is_refined": false
 }
 ```
 
 ---
 
-### 5. Durum Akışı ile Soru Sorma (`POST /api/v1/query-stream`)
-LangGraph iş akışıyla senkronize olarak aşama durumlarını ve nihai cevabı ileten **NDJSON (Newline Delimited JSON)** akış protokolüdür.
+### 5. Query Assistant - Event Stream (`POST /api/v1/query-stream`)
+Streams execution stages and delivers the final answer via newline-delimited JSON (**NDJSON**).
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/query-stream" \
@@ -112,12 +112,11 @@ curl -X POST "http://localhost:8000/api/v1/query-stream" \
      }'
 ```
 
-**Akış Boyunca Gelen Event Tipleri:**
-1. `{"type": "status", "message": "🔍 İlgili şirket belgeleri taranıyor...", "node": "retrieve"}`
+**Event Types Delivered in Stream:**
+1. `{"type": "status", "message": "🔍 Searching relevant enterprise documents...", "node": "retrieve"}`
 2. `{"type": "sources", "sources": [...]}`
-3. `{"type": "status", "message": "✍️ Yanıt hazırlanıyor...", "node": "generate"}`
-4. `{"type": "status", "message": "🛡️ Kaynak uyumu ve doğruluk denetleniyor...", "node": "grade"}`
-5. *(Gerekirse)* `{"type": "status", "message": "✍️ Yanıt yeniden değerlendiriliyor ve belgelere göre sadeleştiriliyor...", "node": "refine"}`
-6. `{"type": "grade", "grade": "evet", "passed": true, "is_refined": false}`
+3. `{"type": "status", "message": "✍️ Preparing response...", "node": "generate"}`
+4. `{"type": "status", "message": "🛡️ Verifying factual accuracy...", "node": "grade"}`
+5. *(If triggered)* `{"type": "status", "message": "✍️ Re-evaluating and refining response to match documents...", "node": "refine"}`
+6. `{"type": "grade", "grade": "yes", "passed": true, "is_refined": false}`
 7. `{"type": "done", "answer": "...", "sources": [...], "is_refined": false}`
-

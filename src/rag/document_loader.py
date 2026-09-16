@@ -4,10 +4,13 @@ from pypdf import PdfReader
 from docx import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+
 class DocumentLoader:
+    """Document loader and contextual chunker for enterprise PDF, DOCX, and TXT files."""
+
     def __init__(self, data_dir: str):
         self.data_dir = data_dir
-        # Metni parçalara bölerken anlam kopmasını önlemek için 100 karakter örtüşme (overlap) bırakıyoruz
+        # Retain 100 characters overlap to preserve semantic continuity across chunk borders
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=600,
             chunk_overlap=100,
@@ -16,29 +19,28 @@ class DocumentLoader:
 
     @staticmethod
     def _extract_document_header(content: str) -> str:
-        """Belge metninin ilk satırlarından DOKÜMAN ve KOD bilgisini çıkararak bağlamsal başlık oluşturur.
+        """Extract DOCUMENT / DOKÜMAN and CODE / KOD from the first lines to construct a contextual header.
 
-        Örnek çıktı: '[Belge: NovaTech Bilgi Güvenliği ve Cihaz Kullanım Esasları | KOD: SEC-POL-04]'
-        Başlık bulunamazsa dosya adından türetilmez; boş döner.
+        Example output: '[Document: NovaTech Information Security Policy | CODE: SEC-POL-04]'
         """
-        lines = content.strip().split("\n")[:5]  # İlk 5 satırı tara
+        lines = content.strip().split("\n")[:5]
 
         doc_title = ""
         doc_code = ""
 
         for line in lines:
             stripped = line.strip()
-            # "DOKÜMAN:" veya "DOKÜMAN :" formatını yakala
-            if re.match(r"^DOKÜMAN\s*:", stripped, re.IGNORECASE):
-                doc_title = re.sub(r"^DOKÜMAN\s*:\s*", "", stripped, flags=re.IGNORECASE).strip()
-            # "KOD:" veya "KOD :" formatını yakala
-            elif re.match(r"^KOD\s*:", stripped, re.IGNORECASE):
-                doc_code = re.sub(r"^KOD\s*:\s*", "", stripped, flags=re.IGNORECASE).strip()
+            # Match "DOCUMENT:" or "DOKÜMAN:"
+            if re.match(r"^(DOCUMENT|DOKÜMAN)\s*:", stripped, re.IGNORECASE):
+                doc_title = re.sub(r"^(DOCUMENT|DOKÜMAN)\s*:\s*", "", stripped, flags=re.IGNORECASE).strip()
+            # Match "CODE:" or "KOD:"
+            elif re.match(r"^(CODE|KOD)\s*:", stripped, re.IGNORECASE):
+                doc_code = re.sub(r"^(CODE|KOD)\s*:\s*", "", stripped, flags=re.IGNORECASE).strip()
 
         if doc_title and doc_code:
-            return f"[Belge: {doc_title} | KOD: {doc_code}]"
+            return f"[Document: {doc_title} | CODE: {doc_code}]"
         elif doc_title:
-            return f"[Belge: {doc_title}]"
+            return f"[Document: {doc_title}]"
 
         return ""
 
@@ -52,7 +54,7 @@ class DocumentLoader:
                     text += content + "\n"
             return text
         except Exception as e:
-            print(f"[DocumentLoader] PDF okuma hatası ({os.path.basename(file_path)}): {e}")
+            print(f"[DocumentLoader] PDF read error ({os.path.basename(file_path)}): {e}")
             return ""
 
     def _read_docx(self, file_path: str) -> str:
@@ -60,7 +62,7 @@ class DocumentLoader:
             doc = Document(file_path)
             return "\n".join([p.text for p in doc.paragraphs if p.text])
         except Exception as e:
-            print(f"[DocumentLoader] DOCX okuma hatası ({os.path.basename(file_path)}): {e}")
+            print(f"[DocumentLoader] DOCX read error ({os.path.basename(file_path)}): {e}")
             return ""
 
     def _read_txt(self, file_path: str) -> str:
@@ -72,14 +74,14 @@ class DocumentLoader:
                 with open(file_path, "r", encoding="cp1254", errors="replace") as f:
                     return f.read()
             except Exception as e:
-                print(f"[DocumentLoader] TXT okuma hatası ({os.path.basename(file_path)}): {e}")
+                print(f"[DocumentLoader] TXT read error ({os.path.basename(file_path)}): {e}")
                 return ""
         except Exception as e:
-            print(f"[DocumentLoader] TXT okuma hatası ({os.path.basename(file_path)}): {e}")
+            print(f"[DocumentLoader] TXT read error ({os.path.basename(file_path)}): {e}")
             return ""
 
     def load_and_chunk_file(self, file_path: str):
-        """Tek bir belgeyi okur, başlık enjekte eder ve parçalar."""
+        """Read a single file, inject contextual header, and generate chunks."""
         chunks = []
         ids = []
         metadatas = []
@@ -98,19 +100,19 @@ class DocumentLoader:
         elif ext == ".txt":
             content = self._read_txt(file_path)
         else:
-            print(f"Desteklenmeyen dosya formatı atlandı: {filename}")
+            print(f"[DocumentLoader] Skipping unsupported file format: {filename}")
             return chunks, ids, metadatas
 
         if not content.strip():
             return chunks, ids, metadatas
 
-        # Bağlamsal başlığı çıkar (Contextual Chunking)
+        # Extract contextual header (Contextual Chunking)
         doc_header = self._extract_document_header(content)
 
         chunk_texts = self.text_splitter.split_text(content)
         for idx, chunk in enumerate(chunk_texts):
-            # Her parçanın başına belge başlığını enjekte et
-            if doc_header and not chunk.strip().startswith("[Belge:"):
+            # Inject document header into each chunk if not already present
+            if doc_header and not (chunk.strip().startswith("[Document:") or chunk.strip().startswith("[Belge:")):
                 contextualized_chunk = f"{doc_header}\n{chunk}"
             else:
                 contextualized_chunk = chunk
@@ -127,7 +129,7 @@ class DocumentLoader:
         return chunks, ids, metadatas
 
     def load_and_chunk_all(self):
-        """data/ klasöründeki tüm geçerli belgeleri okur ve parçalar."""
+        """Read and chunk all valid enterprise documents in data/ directory."""
         all_chunks = []
         all_ids = []
         metadatas = []

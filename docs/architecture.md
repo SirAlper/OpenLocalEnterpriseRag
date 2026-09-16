@@ -1,10 +1,10 @@
-# 🏗️ Sistem Mimarisi ve Çalışma Prensipleri
+# 🏗️ System Architecture & Engineering Principles
 
-`OpenLocalEnterpriseRag`, verilerin harici bulut sağlayıcılarına (OpenAI, Anthropic vb.) gönderilmesini engelleyerek, tamamen yerel donanımda çalışan **iki aşamalı arama (Two-Stage Retrieval)** ve **durum tabanlı ajan (Agentic AI)** prensiplerine dayanır.
+`OpenLocalEnterpriseRag` is built upon **Two-Stage Retrieval** and **Stateful Agentic AI (LangGraph)** workflows designed to execute 100% locally on private enterprise hardware without sending proprietary data to third-party cloud APIs.
 
 ---
 
-## 📐 Genel Mimari Şeması
+## 📐 High-Level Architecture Diagram
 
 ```text
 +-------------------------------------------------------------------------+
@@ -26,7 +26,7 @@
 |             |                          +-----------+------------+       |
 |             |                                      |                    |
 |             |              +-----------------------+------------------+ |
-|             |              | [Doğrulandı]          | [Şüpheli & Retry]| |
+|             |              | [Verified Grounded]   | [Unverified]     | |
 |             |              v                       v                  | |
 |             |            [END]             +-------------------+      | |
 |             |                              |    Refine Node    |      | |
@@ -35,7 +35,7 @@
 |             |                                        |                | |
 |             |                                        v                | |
 |             |                                      [END]              | |
-|             |              | [Limit Aşıldı]                           | |
+|             |              | [Max Retries Exceeded]                   | |
 |             |              +------------------------------------------+ |
 |             |                                      |                    |
 |             |                                      v                    |
@@ -56,57 +56,56 @@
 
 ---
 
-## 🔍 İki Aşamalı Arama & Yeniden Sıralama (Two-Stage Retrieval)
+## 🔍 Two-Stage Retrieval & Cross-Encoder Reranking
 
-Geleneksel RAG sistemlerinde yalnızca vektör benzerliği (Cosine Similarity) kullanılır; bu durum semantik olarak yakın görünen ancak soruya doğrudan cevap vermeyen parçaların seçilmesine yol açabilir. Projemiz bu sorunu iki aşamalı bir yaklaşımla çözer:
+Traditional naive RAG implementations rely solely on vector cosine similarity, which frequently retrieves semantically adjacent but factually unhelpful text passages. Our architecture addresses this with a high-accuracy two-stage pipeline:
 
-### 1. Aşama: Hızlı Vektör Arama (Bi-Encoder / BAAI/bge-m3)
-* **Model:** `BAAI/bge-m3` (1024 boyutlu yoğun vektörler).
-* **İşlem:** Kullanıcının sorusu vektörleştirilir ve ChromaDB üzerinde milisaniyeler içinde taranarak geniş bir aday havuzu (`n_results=10`) çekilir.
-* **Mesafe Eşiği (Distance Threshold):** Çok uzak veya alakasız parçalar (`max_distance=1.35`) bu aşamada doğrudan elenir.
+### Stage 1: Fast Bi-Encoder Vector Search (`BAAI/bge-m3`)
+* **Model:** `BAAI/bge-m3` (1024-dimensional dense vectors).
+* **Operation:** User query is vectorized and matched against ChromaDB within milliseconds to retrieve a broad candidate pool (`n_results=10`).
+* **Distance Thresholding:** Distant or irrelevant chunks exceeding `max_distance = 1.35` are discarded immediately.
 
-### 2. Aşama: Çapraz Kodlayıcı ile Yeniden Sıralama (Cross-Encoder / BAAI/bge-reranker-v2-m3)
-* **Model:** `BAAI/bge-reranker-v2-m3`
-* **İşlem:** Kalan aday parçalar, soru ile ikili çiftler halinde (`[Soru, Belge Parçası]`) Cross-Encoder modeline verilir.
-* **Sonuç:** Model, sorunun belge tarafından gerçekten yanıtlanıp yanıtlanmadığını tam dikkat mekanizmasıyla (Full-Attention) puanlar. En yüksek puanlı `RERANKER_TOP_N = 3` parça seçilerek LLM'e bağlam olarak iletilir.
+### Stage 2: Full-Attention Cross-Encoder Reranking (`BAAI/bge-reranker-v2-m3`)
+* **Model:** `BAAI/bge-reranker-v2-m3`.
+* **Operation:** Remaining candidates are paired with the user query (`[Query, Document Chunk]`) and scored simultaneously across cross-attention layers.
+* **Output:** Deep cross-attention scores determine genuine relevance. The top `RERANKER_TOP_N = 3` highest-scoring passages are selected and concatenated into the prompt context for the LLM.
 
 ---
 
-## 📑 Bağlamsal Parçalama (Contextual Chunking)
+## 📑 Contextual Chunking
 
-Standart metin parçalayıcılar (text splitters), metni belirli karakter veya token sınırlarında keser. Bu durum, belgenin başlığı ve kodundan kopmuş metin parçalarının semantik anlamını yitirmesine neden olur.
+Standard text splitters segment documents at fixed character or token boundaries. This often separates vital section clauses from their document titles or regulatory codes, eroding semantic retrieval accuracy.
 
-`src/rag/document_loader.py` modülü **Bağlamsal Parçalama** uygular:
-1. Belgenin ilk 5 satırı taranarak belge adı ve doküman kodu çıkarılır:
-   - Örnek: `[Belge: NovaTech Bilgi Güvenliği Esasları | KOD: SEC-POL-04]`
-2. Bu başlık, o belgeden türetilen **her bir parçanın en başına otomatik olarak enjekte edilir**:
+The `src/rag/document_loader.py` module applies **Contextual Chunking**:
+1. Scans the initial lines of the document to extract document titles and regulatory codes:
+   - Example: `[Document: NovaTech Information Security Policy | CODE: SEC-POL-04]`
+2. Automatically injects this contextual header **at the beginning of every chunk produced from that document**:
    ```text
-   [Belge: NovaTech Bilgi Güvenliği Esasları | KOD: SEC-POL-04]
-   Madde 4.1: Şirket bilgisayarlarında USB bellek kullanımı bilgi işlem onayına tabidir...
+   [Document: NovaTech Information Security Policy | CODE: SEC-POL-04]
+   Clause 4.1: USB drive usage on corporate computers requires prior IT authorization...
    ```
-3. Böylece embedding modeli arama yaparken parçanın hangi belge ve kural setine ait olduğunu tam olarak anlar.
+3. The embedding model retains the parent document identity and regulatory scope for every individual passage during similarity search.
 
 ---
 
-## 🤖 LangGraph Durum Grafı ve Öz-Düzeltmeli Denetim (Self-RAG & Refinement)
+## 🤖 LangGraph State Graph & Self-Correction (Self-RAG)
 
-İş akışı tek yönlü doğrusal bir boru hattı değil, geri beslemeli ve durum kontrollü bir LangGraph grafiğidir (`src/agent/agent_graph.py`):
+Rather than executing as a rigid linear pipeline, the system operates as a feedback-driven state graph (`src/agent/agent_graph.py`):
 
-1. **`retrieve` Düğümü:**
-   - ChromaDB + Reranker motorunu çalıştırır.
-   - Eğer eşleşen hiçbir kurumsal belge bulunamazsa doğrudan *"Bu bilgi şirket belgelerinde bulunmamaktadır"* yanıtına yönlendirir.
-2. **`generate` Düğümü:**
-   - `Qwen2.5-1.5B-Instruct` modeli devreye girerek belgelere sadık kalarak yanıt üretir.
-3. **`grade` Düğümü (Hallucination Grader):**
-   - Üretilen yanıt ile bağlamı karşılaştırır. Paraphrase (farklı sözcüklerle ifade etme) veya özetleme halüsinasyon sayılmaz; doğrudan belgede olmayan çelişkili veya uydurma iddialar tespit edilir.
-4. **Koşullu Karar (`decide_hallucinate`):**
-   - **Doğrulandı (Evet):** Akış başarıyla sonlandırılır (`END`), kaynaklar ve doğrulanmış cevap kullanıcıya sunulur.
-   - **Şüpheli / Doğrulanamadı (Hayır):**
-     - Eğer yanıt daha önce düzeltilmediyse (`retry_count < 1`), doğrudan `fallback`'e düşmek yerine **`refine`** düğümüne yönlendirilir.
-     - Deneme limiti aşıldıysa son çare olarak güvenli `fallback` düğümü devreye girer.
-5. **`refine` Düğümü (Self-Correction & Budama):**
-   - Uzun yanıtlarda doğru bilgilerin gereksiz yere silinmesini önler.
-   - Taslak yanıttaki belgesiz/spekülatif cümleleri çıkarıp budar, yalnızca bağlam tarafından kesin doğrulanan bilgileri koruyarak yanıtı profesyonelce yeniden yapılandırır.
-6. **Kullanıcı Deneyimi:**
-   - Token bazlı parçalı akış yerine, model arka planda düşünüp doğrulama yaparken arayüzde *"💭 Düşünülüyor ve belgeler inceleniyor..."* durumu gösterilir. İş akışı tamamlandığında nihai ve doğrulanmış yanıt eksiksiz bir mesaj olarak ekrana basılır.
-
+1. **`retrieve` Node:**
+   - Queries ChromaDB and filters through the Cross-Encoder reranker.
+   - If no relevant enterprise documents are found, immediately routes to the standard no-context response.
+2. **`generate` Node:**
+   - Invokes `Qwen2.5-1.5B-Instruct` to formulate a professional, grounded response in Turkish adhering strictly to the retrieved context.
+3. **`grade` Node (Hallucination Grader):**
+   - Compares the draft response with the retrieved context. Paraphrasing and stylistic summaries are preserved; only unverified, contradictory, or fabricated claims trigger failure.
+4. **Conditional Routing (`decide_hallucinate`):**
+   - **Grounded (`yes`):** Workflow terminates successfully (`END`), returning the verified answer alongside chunk sources and distances.
+   - **Ungrounded / Speculative (`no`):**
+     - If the answer has not yet been refined (`retry_count < 1`), it routes to the **`refine`** node.
+     - If retry limits are exceeded, it routes to the safe `fallback` node.
+5. **`refine` Node (Self-Correction & Pruning):**
+   - Prevents throwing away mostly accurate answers on long queries.
+   - Prunes unverified assertions, retains confirmed factual statements, and cleanly restructures the final Turkish response.
+6. **User Interaction & Thinking Indicator:**
+   - Eliminates progressive character streaming glitches. The UI displays an active *"💭 Thinking and reviewing enterprise documents..."* spinner while graph nodes execute, delivering the complete, validated response atomically.

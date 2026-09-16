@@ -1,75 +1,75 @@
-# 🗄️ Kurumsal Veritabanı Entegrasyonu (SQLAlchemy)
+# 🗄️ Enterprise Database Integration (SQLAlchemy)
 
-`OpenLocalEnterpriseRag`, belirli bir şirketin veya tek bir veritabanı sağlayıcısının mimarisine bağımlı kalmadan; **PostgreSQL, MSSQL, MySQL, Oracle veya SQLite** gibi tüm ilişkisel veritabanlarına evrensel olarak bağlanabilen **SQLAlchemy tabanlı modüler bir konnektör katmanı** (`src/connectors/`) içerir.
-
----
-
-## 🎯 Yetenekler ve Kullanım Modelleri
-
-Sistem iki farklı veritabanı entegrasyon modelini destekler:
-
-1. **Canlı SQL Sorgulama (Text-to-SQL Tool):**
-   - Sayısal, tablosal ve anlık değişen veriler için (satışlar, stoklar, siparişler).
-   - Dil modeli veritabanını dinamik olarak inceler ve salt-okunur `SELECT` sorguları üreterek anında yanıt döner.
-2. **Tablo Vektörleştirme (Table-to-Vector ETL):**
-   - Veritabanındaki metin kolonlarını (destek kayıtları, CRM görüşme notları, ürün açıklamaları) bağlamsal başlıklarla parçalayarak ChromaDB vektör motoruna indeksler.
+`OpenLocalEnterpriseRag` features a modular, database-agnostic connector layer (`src/connectors/`) built on **SQLAlchemy**. It enables plug-and-play connectivity to **PostgreSQL, MSSQL, MySQL, Oracle, or SQLite** without coupling to proprietary database vendor APIs.
 
 ---
 
-## ⚙️ Yapılandırma (`.env` veya Ortam Değişkenleri)
+## 🎯 Integration Patterns
 
-Sisteme veritabanı bağlamak için tek bir ortam değişkeni (`DATABASE_URL`) tanımlamak yeterlidir:
+The system supports two complementary database workflows:
+
+1. **Live Text-to-SQL Tooling:**
+   - Designed for numeric, transactional, and dynamic operational data (sales, inventory, orders).
+   - The LLM dynamically inspects accessible database schemas and executes safe read-only `SELECT` queries to formulate answers.
+2. **Table-to-Vector ETL Synchronization:**
+   - Extracts unstructured or semi-structured text columns (support tickets, CRM meeting notes, product descriptions), enriches them with contextual record headers, and indexes them into the ChromaDB vector store.
+
+---
+
+## ⚙️ Configuration (`.env` or Environment Variables)
+
+Connect any relational database by defining a single `DATABASE_URL` environment variable:
 
 ```env
 # 1. PostgreSQL
-DATABASE_URL=postgresql+psycopg2://kullanici:sifre@localhost:5432/sirket_db
+DATABASE_URL=postgresql+psycopg2://user:password@localhost:5432/enterprise_db
 
 # 2. Microsoft SQL Server (MSSQL)
-DATABASE_URL=mssql+pyodbc://kullanici:sifre@host:1433/sirket_db?driver=ODBC+Driver+17+for+SQL+Server
+DATABASE_URL=mssql+pyodbc://user:password@host:1433/enterprise_db?driver=ODBC+Driver+17+for+SQL+Server
 
 # 3. MySQL
-DATABASE_URL=mysql+pymysql://kullanici:sifre@localhost:3306/sirket_db
+DATABASE_URL=mysql+pymysql://user:password@localhost:3306/enterprise_db
 
 # 4. Oracle
-DATABASE_URL=oracle+cx_oracle://kullanici:sifre@localhost:1521/?service_name=sirket_db
+DATABASE_URL=oracle+cx_oracle://user:password@localhost:1521/?service_name=enterprise_db
 
-# 5. Yerel Test / SQLite (Varsayılan):
+# 5. Local Development / SQLite (Default):
 DATABASE_URL=sqlite:///./data/sample_enterprise.db
 ```
 
-### Güvenlik ve Tablo Filtresi (Whitelisting):
-Şirketlerin maaş, şifre ve kimlik bilgileri içeren hassas tabloları gizleyebilmesi için opsiyonel filtre sunulur:
+### Security & Table Whitelisting:
+Protect sensitive enterprise tables (salaries, credentials, PII) using configuration whitelists:
 
 ```env
-# Yalnızca bu tablolara erişime izin ver:
+# Allow access only to explicit business tables:
 DB_ALLOWED_TABLES=urunler,satislar,destek_talepleri
 
-# Tek sorguda dönebilecek azami satır sayısı (varsayılan: 50):
+# Maximum number of rows returned per query (default: 50):
 DB_MAX_ROWS=50
 ```
 
 ---
 
-## 🔒 Güvenlik ve Koruma Kalkanı (Strict Read-Only Guard)
+## 🔒 Strict Read-Only Security Guard
 
-Yapay zekanın veritabanını bozmasını veya yetkisiz işlemler yapmasını engellemek için kod seviyesinde çok katmanlı güvenlik uygulanır (`src/connectors/db_connector.py`):
+To prevent accidental data corruption or malicious command injection, multi-layer verification is enforced at the code level (`src/connectors/db_connector.py`):
 
-* **Yalnızca `SELECT` İzni:** Sorgular `SELECT` veya `WITH ... SELECT` ile başlamak zorundadır.
-* **Zararlı Komut Engeli:** `DROP`, `INSERT`, `UPDATE`, `DELETE`, `ALTER`, `TRUNCATE`, `EXEC`, `CREATE`, `GRANT`, `REVOKE` kelimelerini içeren sorgular anında reddedilir.
-* **Bellek Koruma:** `max_rows` sınırlaması ile veritabanının kilitlenmesi veya belleğin şişmesi engellenir.
+* **Mandatory `SELECT` Prefix:** Queries must begin with `SELECT` or `WITH ... SELECT`.
+* **Prohibited Keyword Guard:** Queries containing destructive statements (`DROP`, `INSERT`, `UPDATE`, `DELETE`, `ALTER`, `TRUNCATE`, `EXEC`, `CREATE`, `GRANT`, `REVOKE`) are aborted immediately.
+* **Memory Protection:** Result sets are capped at `max_rows` to prevent server memory exhaustion.
 
 ---
 
-## 🔄 Tablo Vektörleştirme (ETL Senkronizasyonu)
+## 🔄 Table Vectorization (ETL Sync)
 
-Veritabanındaki bir tabloyu vektörleştirip ChromaDB'ye eklemek için:
+Synchronize a relational table into ChromaDB using either the Web UI or REST API:
 
-### Arayüz Üzerinden (Streamlit):
-1. Sol paneldeki **"🗄️ Veritabanı"** sekmesini açın.
-2. Açılır menüden indekslemek istediğiniz tabloyu (örn: `destek_talepleri`) seçin.
-3. **"🔄 Tabloyu Vektörleştir"** butonuna tıklayın.
+### Via Streamlit UI:
+1. Open the **"🗄️ Database"** section in the left sidebar.
+2. Select your target table from the dropdown (e.g., `destek_talepleri`).
+3. Click **"🔄 Vectorize Table"**.
 
-### REST API Üzerinden:
+### Via REST API:
 ```bash
 curl -X POST "http://localhost:8000/api/v1/database/sync-table" \
      -H "Content-Type: application/json" \
@@ -80,11 +80,11 @@ curl -X POST "http://localhost:8000/api/v1/database/sync-table" \
 
 ---
 
-## 🧪 Tak-Çalıştır Örnek Veritabanı (`sample_enterprise.db`)
+## 🧪 Zero-Config Sample Database (`sample_enterprise.db`)
 
-Projeyi yeni klonlayan bir geliştiricinin harici bir veritabanı sunucusu kurmasına gerek kalmaması için, sistem ilk açılışta otomatik olarak `data/sample_enterprise.db` dosyasını oluşturur.
+To enable immediate testing upon cloning the repository without spinning up an external database, the platform automatically generates `data/sample_enterprise.db` on initial startup.
 
-İçerisinde hazır mock kurumsal veriler bulunur:
-- **`urunler`:** Ürün SKU, kategori, fiyat ve stok miktarları.
-- **`satislar`:** Sipariş no, müşteri adı, bölge, tutar ve tarihler.
-- **`destek_talepleri`:** Teknik destek konuları, müşteri talepleri ve çözüm adımları.
+Pre-populated mock enterprise datasets include:
+- **`urunler` (Products):** SKU, categories, unit prices, and inventory stock levels.
+- **`satislar` (Sales):** Order numbers, customer names, regions, total amounts, and transaction dates.
+- **`destek_talepleri` (Support Tickets):** Issue subjects, problem descriptions, resolution logs, and ticket status.
