@@ -70,13 +70,13 @@ curl -X DELETE "http://localhost:8000/api/v1/documents/NovaTech_Security_Policy.
 ---
 
 ### 4. Query Assistant - Batch (`POST /api/v1/query`)
-Executes the LangGraph workflow, returning the verified Turkish answer, reference sources, and refinement flags.
+Executes the LangGraph workflow, returning the verified answer, reference sources, and refinement flags.
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/query" \
      -H "Content-Type: application/json" \
      -d '{
-       "question": "Şirket bilgisayarlarında parola güncelleme periyodu nedir?"
+       "question": "What is the password update policy for workstations?"
      }'
 ```
 
@@ -84,7 +84,7 @@ curl -X POST "http://localhost:8000/api/v1/query" \
 ```json
 {
   "status": "success",
-  "answer": "Şirket bilgi güvenliği politikası gereğince parolalar en az 90 günde bir güncellenmelidir.",
+  "answer": "According to the company information security policy, passwords must be updated at least every 90 days.",
   "sources": [
     {
       "source": "NovaTech_Security_Policy.pdf",
@@ -108,9 +108,10 @@ Streams execution stages and delivers the final answer via newline-delimited JSO
 curl -X POST "http://localhost:8000/api/v1/query-stream" \
      -H "Content-Type: application/json" \
      -d '{
-       "question": "Donanım arızalarında destek sürecimiz nasıl işler?"
+       "question": "How does the hardware failure support process work?"
      }'
 ```
+
 
 **Event Types Delivered in Stream:**
 1. `{"type": "status", "message": "🔍 Searching relevant enterprise documents...", "node": "retrieve"}`

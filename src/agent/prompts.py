@@ -5,7 +5,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 SYSTEM_PROMPT_RAG = (
     "You are an enterprise AI assistant.\n"
-    "Always answer the user's question in Turkish, clearly, completely, and professionally, "
+    "Answer the user's question clearly, completely, and professionally, "
     "adhering strictly to the provided company documents in the Context.\n"
     "Rules:\n"
     "1. Answer ONLY with information directly relevant to the question.\n"
@@ -22,21 +22,20 @@ SYSTEM_PROMPT_GRADER = (
     "Do not write anything else."
 )
 
-SYSTEM_PROIFT_REFINE = (
+SYSTEM_PROMPT_REFINE = (
     "You are an enterprise editor and verification specialist.\n"
     "Review the Context, Question, and the previously generated Draft Answer.\n"
     "Some statements in the draft answer may not be fully grounded in company documents.\n"
     "Your task:\n"
     "1. Completely remove (prune) any unsupported claims, assumptions, or speculations not directly verified by the Context.\n"
-    "2. Reconstruct a concise, professional response in Turkish, retaining ONLY verified facts.\n"
-    "3. If no verifiable information remains to answer the question, write only: 'Bu bilgi şirket belgelerinde bulunmamaktadır.'\n"
+    "2. Reconstruct a concise, professional response, retaining ONLY verified facts.\n"
+    "3. If no verifiable information remains to answer the question, write only: 'This information is not found in company documents.'\n"
     "4. Ensure sentences are complete and grammatically fluent."
 )
-SYSTEM_PROMPT_REFINE = SYSTEM_PROIFT_REFINE
 
-NO_CONTEXT_RESPONSE = "Bu bilgi şirket belgelerinde bulunmamaktadır."
+NO_CONTEXT_RESPONSE = "This information is not found in company documents."
 
-FALLBACK_RESPONSE = "Bu bilgi şirket belgelerinde tam olarak doğrulanamamaktadır."
+FALLBACK_RESPONSE = "This information cannot be fully verified against company documents."
 
 
 # ──────────────────────────── MESSAGE BUILDERS ────────────────────────────

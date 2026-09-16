@@ -96,7 +96,7 @@ Rather than executing as a rigid linear pipeline, the system operates as a feedb
    - Queries ChromaDB and filters through the Cross-Encoder reranker.
    - If no relevant enterprise documents are found, immediately routes to the standard no-context response.
 2. **`generate` Node:**
-   - Invokes `Qwen2.5-1.5B-Instruct` to formulate a professional, grounded response in Turkish adhering strictly to the retrieved context.
+   - Invokes `Qwen2.5-1.5B-Instruct` to formulate a professional, grounded response adhering strictly to the retrieved context.
 3. **`grade` Node (Hallucination Grader):**
    - Compares the draft response with the retrieved context. Paraphrasing and stylistic summaries are preserved; only unverified, contradictory, or fabricated claims trigger failure.
 4. **Conditional Routing (`decide_hallucinate`):**
@@ -106,6 +106,7 @@ Rather than executing as a rigid linear pipeline, the system operates as a feedb
      - If retry limits are exceeded, it routes to the safe `fallback` node.
 5. **`refine` Node (Self-Correction & Pruning):**
    - Prevents throwing away mostly accurate answers on long queries.
-   - Prunes unverified assertions, retains confirmed factual statements, and cleanly restructures the final Turkish response.
+   - Prunes unverified assertions, retains confirmed factual statements, and cleanly restructures the final response.
 6. **User Interaction & Thinking Indicator:**
    - Eliminates progressive character streaming glitches. The UI displays an active *"💭 Thinking and reviewing enterprise documents..."* spinner while graph nodes execute, delivering the complete, validated response atomically.
+

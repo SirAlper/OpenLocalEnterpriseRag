@@ -19,7 +19,7 @@
 * 🛡️ **Self-Correcting Hallucination Guard (Self-RAG):** Evaluates draft answers against retrieved sources. If speculative claims are detected on complex queries, the `refine` node prunes hallucinations and preserves confirmed facts instead of abruptly failing.
 * 🗄️ **Universal Database Connector:** Connects to **PostgreSQL, MSSQL, MySQL, Oracle, and SQLite** via an SQLAlchemy abstraction layer with strict read-only security guards and automated table vectorization.
 * ⚡ **Thinking Indicator UX:** Streamlined user experience featuring interactive thinking indicators while LangGraph verifies claims, delivering complete, verified responses atomically without character flickering.
-* 🌐 **Multilingual & Turkish Response Directives:** Optimized for enterprise multilingual retrieval while maintaining fluent Turkish response generation out of the box.
+* 🌐 **Language-Agnostic & Multilingual:** Native multilingual search across enterprise corpora powered by BGE-M3 dense vectors, responding naturally in the user's language without artificial constraints.
 * 🖥️ **Full-Stack Suite:** Ready-to-use FastAPI REST gateway (with Swagger OpenAPI docs) paired with a modern Streamlit enterprise control panel.
 
 ---
