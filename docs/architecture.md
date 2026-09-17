@@ -21,30 +21,29 @@
 |   +---------+---------+                +-----------+------------+       |
 |             |                                      |                    |
 |             |                                      v                    |
-|             |                          +------------------------+       |
-|             |                          |   Hallucination Grader |       |
-|             |                          +-----------+------------+       |
-|             |                                      |                    |
-|             |              +-----------------------+------------------+ |
-|             |              | [Verified Grounded]   | [Unverified]     | |
-|             |              v                       v                  | |
-|             |            [END]             +-------------------+      | |
-|             |                              |    Refine Node    |      | |
-|             |                              | (Self-Correction) |      | |
-|             |                              +---------+---------+      | |
-|             |                                        |                | |
-|             |                                        v                | |
-|             |                                      [END]              | |
-|             |              | [Max Retries Exceeded]                   | |
-|             |              +------------------------------------------+ |
-|             |                                      |                    |
-|             |                                      v                    |
-|             |                              +---------------+            |
-|             |                              | Fallback Node |            |
-|             |                              +-------+-------+            |
-|             |                                      |                    |
-|             |                                      v                    |
-|             |                                    [END]                  |
+|             |                 +--------------------+------------+       |
+|             |                 |  +---------------------------+  |       |
+|             |                 |  |    Hallucination Grader   |<----+    |
+|             |                 |  +-------------+-------------+  |   |    |
+|             |                 +----------------|----------------+   |    |
+|             |                                  |                    |    |
+|             |              +-------------------+------------------+ |    |
+|             |              | [Verified Grounded]                  | |    |
+|             |              v                                      | |    |
+|             |            [END]                                    | |    |
+|             |                                                     | |    |
+|             |              | [Unverified & retry < 1]             | |    |
+|             |              v                                      | |    |
+|             |     +-------------------+                           | |    |
+|             |     |    Refine Node    | --------------------------+ |    |
+|             |     | (Self-Correction) | (Re-evaluates via Grader)   |    |
+|             |     +-------------------+                             |    |
+|             |                                                       |    |
+|             |              | [Unverified & retry >= 1]              |    |
+|             |              v                                        |    |
+|             |     +-------------------+                             |    |
+|             |     |   Fallback Node   | ------------------------> [END]  |
+|             |     +-------------------+                                  |
 +-------------|-----------------------------------------------------------+
               |
               v
@@ -103,10 +102,37 @@ Rather than executing as a rigid linear pipeline, the system operates as a feedb
    - **Grounded (`yes`):** Workflow terminates successfully (`END`), returning the verified answer alongside chunk sources and distances.
    - **Ungrounded / Speculative (`no`):**
      - If the answer has not yet been refined (`retry_count < 1`), it routes to the **`refine`** node.
-     - If retry limits are exceeded, it routes to the safe `fallback` node.
-5. **`refine` Node (Self-Correction & Pruning):**
-   - Prevents throwing away mostly accurate answers on long queries.
-   - Prunes unverified assertions, retains confirmed factual statements, and cleanly restructures the final response.
+     - If retry limits are exceeded (`retry_count >= 1`), it routes to the safe `fallback` node.
+5. **`refine` Node (Closed-Loop Self-Correction):**
+   - Prunes unverified assertions, retains confirmed factual statements, and cleanly restructures the draft response.
+   - **Re-Grading Loop:** Once refined, control automatically loops back to `grade` for a secondary audit. If the refined answer passes, it terminates to `END`; if speculative statements persist, it routes to `fallback`.
 6. **User Interaction & Thinking Indicator:**
    - Eliminates progressive character streaming glitches. The UI displays an active *"💭 Thinking and reviewing enterprise documents..."* spinner while graph nodes execute, delivering the complete, validated response atomically.
+
+---
+
+## 🛡️ Enterprise Infrastructure & Security Architecture
+
+The platform implements defense-in-depth security and scalable infrastructure controls across the application stack:
+
+### 1. Concurrency & Thread-Safety (`asyncio.Lock`)
+* **Serialization:** Concurrent user requests at `/api/v1/query` and `/api/v1/query-stream` are serialized via `asyncio.Lock()`.
+* **Resource Protection:** Prevents concurrent GPU memory thrashing, race conditions in transformers execution pipelines, and ChromaDB SQLite lock contention.
+
+### 2. Lifespan Management (FastAPI `lifespan`)
+* Heavy ML models (`SentenceTransformer`, `CrossEncoder`, `ChatHuggingFace`) are initialized during server startup within `@asynccontextmanager async def lifespan(app)`.
+* Eliminates cold-start penalties on individual API calls while keeping unit test suites lightweight and isolated.
+
+### 3. File Upload Hardening & Path Traversal Prevention
+* **Path Traversal Protection:** `os.path.basename()` enforces strict filename sanitization against directory traversal vectors (e.g. `../../`).
+* **Extension Whitelist:** Restricts uploads exclusively to `.pdf`, `.docx`, and `.txt` files. All executable or script extensions (`.exe`, `.sh`, `.py`) are rejected with HTTP 400.
+* **Streaming Memory Limit:** File uploads are validated in 1MB chunks up to `MAX_UPLOAD_SIZE_MB` (default 50 MB). Exceeding uploads are immediately purged from disk and return HTTP 413 (Payload Too Large).
+
+### 4. Database Isolation & Table Access Controls
+* **Read-Only Guards:** Queries are strictly validated to begin with `SELECT` or `WITH ... SELECT`, discarding any data modification keywords (`DROP`, `DELETE`, `INSERT`, etc.).
+* **Table Whitelist Enforcement:** When `DB_ALLOWED_TABLES` is defined, `FROM` and `JOIN` clauses are parsed and verified. Unauthorized table access attempts are blocked before execution.
+
+### 5. Centralized Logging Infrastructure (`src.core.logger`)
+* Replaces unformatted console prints with structured, leveled logging (`INFO`, `WARNING`, `ERROR`).
+* Output is streamed to both the terminal and rotating disk log files (10 MB per file, 5 backup cycles) with zero telemetry leakage.
 

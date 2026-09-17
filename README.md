@@ -73,6 +73,14 @@ streamlit run ui/app.py
 # Web Dashboard: http://localhost:8501
 ```
 
+### 4. Run Automated Tests
+Verify all 32 unit and security tests across agent, database, loader, and API guards:
+```bash
+python -m unittest discover tests -v
+# or using pytest:
+pytest tests/ -v
+```
+
 ---
 
 ## 📁 Repository Structure
@@ -82,18 +90,20 @@ OpenLocalEnterpriseRag/
 ├── data/                  # Enterprise documents (PDF, DOCX, TXT) and sample SQLite DB
 ├── models/                # Local model weights (Qwen2.5-1.5B, BGE-M3, BGE-Reranker)
 ├── vector_db/             # ChromaDB persistent vector collection
+├── tests/                 # Automated unit and security test suite (32 tests)
 ├── ui/
 │   └── app.py             # Streamlit enterprise management dashboard & chat UI
 ├── src/
-│   ├── core/              # System configurations, file paths, and environment settings
+│   ├── core/              # System configurations, environment settings, and centralized logger
 │   ├── rag/               # Contextual document loader and Two-Stage ChromaDB/Reranker engine
 │   ├── agent/             # LangGraph state workflow, LLM loader, prompts, and tools
 │   ├── connectors/        # SQLAlchemy universal database connector and table vectorizer
-│   ├── api/               # FastAPI REST API server with automated startup indexing
-│   └── main.py            # Backward-compatible entrypoint (uvicorn src.main:app)
+│   ├── api/               # FastAPI REST API gateway with lifespan management
+│   └── main.py            # Backward-compatible launch entrypoint (uvicorn src.main:app)
 ├── docs/                  # [Comprehensive Technical Guides](docs/)
 ├── download_model.py      # Script to download HuggingFace model weights to local storage
-└── requirements.txt       # Python package dependencies
+├── requirements.txt       # Python package dependencies
+└── LICENSE                # MIT License
 ```
 
 ---

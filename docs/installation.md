@@ -70,21 +70,62 @@ pip install -r requirements.txt
 
 ---
 
+## ⚙️ Configuration & Environment Variables (`.env`)
+
+Create a `.env` file in the root directory (loaded automatically via `python-dotenv`):
+
+```env
+# --- Database Configuration (Optional) ---
+# Supports PostgreSQL, MSSQL, MySQL, Oracle, SQLite
+DATABASE_URL=sqlite:///./data/sample_enterprise.db
+DB_ALLOWED_TABLES=urunler,satislar,destek_talepleri
+DB_MAX_ROWS=50
+
+# --- API & Security Settings ---
+CORS_ORIGINS=http://localhost:8501,http://127.0.0.1:8501
+MAX_UPLOAD_SIZE_MB=50
+
+# --- Logging Settings ---
+LOG_LEVEL=INFO
+LOG_FILE=app.log
+
+# --- Model & Hardware Execution ---
+RAG_DEVICE=cpu
+ALLOW_ONLINE_HF=0
+```
+
+---
+
 ## 📥 Provisioning Models Locally (`download_model.py`)
 
-To prevent runtime downloads and avoid inflating `~/.cache` or OS temp directories, model weights are pinned directly into the project's `./models/` directory.
+To prevent runtime downloads and avoid inflating `~/.cache` or OS temp directories, model weights are pinned directly into the project's `./models/` directory (~6.4 GB total).
 
-Run the provisioning script once:
+Run the provisioning script:
 ```bash
 python download_model.py
 ```
 
-This script downloads:
-1. `models/bge-m3`: Multilingual semantic dense vector model (~1.1 GB)
-2. `models/bge-reranker-v2-m3`: Cross-Encoder reranker model (~1.1 GB)
-3. `models/qwen2.5-1.5b`: Qwen 2.5 1.5B Instruct model (~2.8 GB)
+* **Smart Verification & Skip Logic:** The script checks if model weights already exist on disk and skips re-downloading.
+* **Force Re-Download:** If you need to re-download corrupted weights, set `FORCE_DOWNLOAD=1`:
+  ```bash
+  FORCE_DOWNLOAD=1 python download_model.py
+  ```
 
-Once downloaded, the system runs in **100% offline (air-gapped)** mode.
+Once downloaded, the system operates in **100% offline (air-gapped)** mode with zero internet access required.
+
+---
+
+## 🧪 Running Automated Tests
+
+Run the full automated test suite (32 unit & security tests):
+
+```bash
+# Using Python's built-in test runner:
+python -m unittest discover tests -v
+
+# Or using pytest:
+pytest tests/ -v
+```
 
 ---
 

@@ -52,11 +52,13 @@ DB_MAX_ROWS=50
 
 ## 🔒 Strict Read-Only Security Guard
 
-To prevent accidental data corruption or malicious command injection, multi-layer verification is enforced at the code level (`src/connectors/db_connector.py`):
+To prevent accidental data corruption or malicious command injection, multi-layer verification is enforced at the code level (`src/connectors/db_connector.py` & `src/connectors/db_loader.py`):
 
 * **Mandatory `SELECT` Prefix:** Queries must begin with `SELECT` or `WITH ... SELECT`.
 * **Prohibited Keyword Guard:** Queries containing destructive statements (`DROP`, `INSERT`, `UPDATE`, `DELETE`, `ALTER`, `TRUNCATE`, `EXEC`, `CREATE`, `GRANT`, `REVOKE`) are aborted immediately.
-* **Memory Protection:** Result sets are capped at `max_rows` to prevent server memory exhaustion.
+* **Table Whitelist Enforcement:** If `DB_ALLOWED_TABLES` is configured, `execute_query()` extracts all `FROM` and `JOIN` table identifiers and verifies they belong to the whitelist. Any attempt to access unauthorized tables (e.g. `salaries`, `users`) is blocked.
+* **ETL Loader Identifier Sanitization:** `DatabaseTableLoader.load_table_as_chunks()` validates that `table_name` is a valid identifier and exists in the connected database schema (`get_tables()`), eliminating SQL injection vectors.
+* **Memory Protection:** Result sets are capped at `max_rows` (configurable via `DB_MAX_ROWS`) to prevent server memory exhaustion.
 
 ---
 
