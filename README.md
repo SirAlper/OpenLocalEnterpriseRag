@@ -98,7 +98,7 @@ OpenLocalEnterpriseRag/
 │   ├── rag/               # Contextual document loader and Two-Stage ChromaDB/Reranker engine
 │   ├── agent/             # LangGraph state workflow, LLM loader, prompts, and tools
 │   ├── connectors/        # SQLAlchemy universal database connector and table vectorizer
-│   ├── api/               # FastAPI REST API gateway with lifespan management
+│   ├── api/               # Modular FastAPI REST API gateway (routes/, schemas, state)
 │   └── main.py            # Backward-compatible launch entrypoint (uvicorn src.main:app)
 ├── docs/                  # [Comprehensive Technical Guides](docs/)
 ├── download_model.py      # Script to download HuggingFace model weights to local storage
