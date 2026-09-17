@@ -1,6 +1,6 @@
 # 🐳 Docker Deployment Guide
 
-This guide details how to deploy `OpenLocalEnterpriseRag` using **Docker** and **Docker Compose** for production and on-premise enterprise environments.
+This guide details how to deploy `OpenLocalRagAgents` using **Docker** and **Docker Compose** for production and on-premise enterprise environments.
 
 ---
 
@@ -19,16 +19,17 @@ The containerized deployment splits the platform into two decoupled services com
 │            │ (Volume)                         │ (Volume)    │
 │            ▼                                  ▼             │
 │   ┌─────────────────────────────────────────────────────┐   │
-│   │           enterprise_rag_backend (Port 8000)        │   │
+│   │             rag_agents_backend (Port 8000)          │   │
 │   │       FastAPI + LangGraph + PyTorch (GPU/CPU)       │   │
 │   └──────────────────────────▲──────────────────────────┘   │
 │                              │ (Internal Network: http)     │
 │   ┌──────────────────────────┴──────────────────────────┐   │
-│   │          enterprise_rag_frontend (Port 8501)        │   │
+│   │            rag_agents_frontend (Port 8501)          │   │
 │   │           Streamlit Web Management UI               │   │
 │   └─────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
+
 
 * **Zero-Bloat Image:** Model weights (`models/`), vector indexes (`vector_db/`), and enterprise documents (`data/`) are mounted dynamically as external volumes. The Docker image remains compact (~1.5 GB).
 * **Data Persistence:** Rebuilding or updating containers never deletes your documents or vectorized data.

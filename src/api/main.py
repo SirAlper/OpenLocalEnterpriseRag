@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Enterprise Local RAG API",
+    title="OpenLocalRagAgents API",
     description="Privacy-first, on-premise RAG and Agentic AI gateway with zero cloud dependencies.",
     version="1.1.0",
     lifespan=lifespan
@@ -62,4 +62,5 @@ __all__ = [
 if __name__ == "__main__":
     import uvicorn
     # Use reload=False to prevent reloading model weights on disk modifications
-    uvicorn.run("src.main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("src.api.main:app", host="0.0.0.0", port=8000, reload=False)
+

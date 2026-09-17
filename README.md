@@ -1,4 +1,4 @@
-# 🏢 OpenLocalEnterpriseRag
+# 🏢 OpenLocalRagAgents
 
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
@@ -35,7 +35,7 @@ Explore our detailed architectural and operational guides:
 | 🗄️ [**Database Connectors**](docs/database_connectors.md) | Universal SQLAlchemy configurations, Text-to-SQL security, and ETL table vectorization |
 | 🔌 [**REST API Reference**](docs/api_reference.md) | FastAPI endpoint documentation, NDJSON event streaming protocols, and cURL examples |
 | 🐳 [**Docker Deployment**](docs/docker_deployment.md) | Production multi-service containerization, NVIDIA GPU passthrough, and volumes |
-| 🗺️ [**Roadmap**](docs/roadmap.md) | Hybrid search (BM25 + Dense), GraphRAG, multi-turn memory, and vLLM acceleration |
+| 🗺️ [**Roadmap**](docs/roadmap.md) | Multi-agent supervisor teams, Hybrid search (BM25 + Dense), GraphRAG, and vLLM acceleration |
 
 ---
 
@@ -43,8 +43,8 @@ Explore our detailed architectural and operational guides:
 
 ### 1. Clone Repository & Install Dependencies
 ```bash
-git clone https://github.com/SirAlper/OpenLocalEnterpriseRag.git
-cd OpenLocalEnterpriseRag
+git clone https://github.com/SirAlper/OpenLocalRagAgents.git
+cd OpenLocalRagAgents
 
 # Create and activate virtual environment
 python -m venv .venv
@@ -86,7 +86,7 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 See the full [Docker Deployment Guide](docs/docker_deployment.md) for Container Toolkit setup.
 
 ### 5. Run Automated Tests
-Verify all 32 unit and security tests across agent, database, loader, and API guards:
+Verify all 30 unit and security tests across agent, database, loader, and API guards:
 ```bash
 python -m unittest discover tests -v
 # or using pytest:
@@ -98,11 +98,12 @@ pytest tests/ -v
 ## 📁 Repository Structure
 
 ```text
-OpenLocalEnterpriseRag/
+OpenLocalRagAgents/
 ├── data/                  # Enterprise documents (PDF, DOCX, TXT) and sample SQLite DB
 ├── models/                # Local model weights (Qwen2.5-1.5B, BGE-M3, BGE-Reranker)
 ├── vector_db/             # ChromaDB persistent vector collection
-├── tests/                 # Automated unit and security test suite (32 tests)
+├── tests/                 # Automated unit and security test suite (30 tests)
+
 ├── ui/
 │   └── app.py             # Streamlit enterprise management dashboard & chat UI
 ├── src/

@@ -13,7 +13,6 @@ from src.agent.nodes import AgentNodes
 from src.agent.agent_graph import EnterpriseRAGAgent, AgentState
 from src.agent.query_service import QueryService
 from src.agent.tools import (
-    calc,
     sql_db_schema,
     sql_db_query,
     db_connector,
@@ -36,7 +35,6 @@ __all__ = [
     "EnterpriseRAGAgent",
     "AgentState",
     "QueryService",
-    "calc",
     "sql_db_schema",
     "sql_db_query",
     "db_connector",
@@ -44,3 +42,4 @@ __all__ = [
     "tool_schema",
     "tools_by_name",
 ]
+

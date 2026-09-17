@@ -6,11 +6,12 @@ import json
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 st.set_page_config(
-    page_title="Enterprise Local RAG",
+    page_title="OpenLocalRagAgents",
     page_icon="🏢",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
 
 # Custom styling
 st.markdown("""
@@ -230,8 +231,9 @@ with st.sidebar:
 
 
 # --- MAIN PANEL (CHAT) ---
-st.markdown('<div class="main-header">🏢 Enterprise Local RAG Assistant</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🏢 OpenLocalRagAgents Assistant</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Zero-leakage, on-premise generative AI assistant running 100% locally on your infrastructure.</div>', unsafe_allow_html=True)
+
 
 # Render Message History
 for msg in st.session_state.messages:

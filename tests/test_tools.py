@@ -1,49 +1,74 @@
 import unittest
-from src.agent.tools import safe_math_eval, calc
+import json
+from unittest.mock import patch
+from src.agent.tools import (
+    sql_db_schema,
+    sql_db_query,
+    all_tools,
+    tools_by_name,
+    tool_schema,
+)
 
 
-class TestSafeMathEval(unittest.TestCase):
-    """Unit tests for safe_math_eval AST mathematical parser."""
+class TestAgentTools(unittest.TestCase):
+    """Unit tests for agent tools registry and database tools."""
 
-    def test_basic_arithmetic(self):
-        self.assertEqual(safe_math_eval("2 + 2"), "4")
-        self.assertEqual(safe_math_eval("10 - 4"), "6")
-        self.assertEqual(safe_math_eval("3 * 7"), "21")
-        self.assertEqual(safe_math_eval("20 / 4"), "5")
+    def test_tool_registry_does_not_contain_calculator(self):
+        """Verify calculator tool is removed and only DB tools are registered."""
+        self.assertNotIn("calculator", tools_by_name)
+        self.assertIn("sql_db_schema", tools_by_name)
+        self.assertIn("sql_db_query", tools_by_name)
+        self.assertEqual(len(all_tools), 2)
 
-    def test_float_and_rounding(self):
-        self.assertEqual(safe_math_eval("10 / 3"), "3.3333")
-        self.assertEqual(safe_math_eval("2.5 * 4"), "10")
+    def test_tool_schemas_generated(self):
+        """Verify schemas are generated for function calling."""
+        self.assertEqual(len(tool_schema), 2)
+        tool_names = [s["function"]["name"] if "function" in s else s.get("name") for s in tool_schema]
+        self.assertIn("sql_db_schema", tool_names)
+        self.assertIn("sql_db_query", tool_names)
 
-    def test_comma_as_decimal_separator(self):
-        self.assertEqual(safe_math_eval("2,5 + 3,5"), "6")
+    @patch("src.agent.tools.db_connector")
+    def test_sql_db_schema_disconnected(self, mock_db):
+        mock_db.is_connected = False
+        res = sql_db_schema.invoke({})
+        self.assertIn("inactive", res.lower())
 
-    def test_parentheses_and_order_of_operations(self):
-        self.assertEqual(safe_math_eval("(2 + 3) * 4"), "20")
-        self.assertEqual(safe_math_eval("2 + 3 * 4"), "14")
+    @patch("src.agent.tools.db_connector")
+    def test_sql_db_schema_connected(self, mock_db):
+        mock_db.is_connected = True
+        mock_db.get_schema_summary.return_value = "Table: users (id INT, name TEXT)"
+        res = sql_db_schema.invoke({})
+        self.assertIn("users", res)
 
-    def test_division_by_zero(self):
-        result = safe_math_eval("10 / 0")
-        self.assertIn("zero", result.lower())
+    @patch("src.agent.tools.db_connector")
+    def test_sql_db_query_disconnected(self, mock_db):
+        mock_db.is_connected = False
+        res = sql_db_query.invoke({"query": "SELECT * FROM users"})
+        self.assertIn("error", res.lower())
 
-    def test_floor_division_by_zero(self):
-        result = safe_math_eval("10 // 0")
-        self.assertIn("zero", result.lower())
+    @patch("src.agent.tools.db_connector")
+    def test_sql_db_query_success(self, mock_db):
+        mock_db.is_connected = True
+        mock_db.execute_query.return_value = {
+            "status": "success",
+            "rows": [{"id": 1, "name": "Alper"}],
+            "count": 1
+        }
+        res = sql_db_query.invoke({"query": "SELECT * FROM users"})
+        parsed = json.loads(res)
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0]["name"], "Alper")
 
-    def test_empty_or_whitespace(self):
-        result = safe_math_eval("   ")
-        self.assertIn("no evaluable", result.lower())
-
-    def test_malicious_code_injection(self):
-        # Expressions with Python builtins or system calls should be stripped or fail
-        result = safe_math_eval("__import__('os').system('ls')")
-        self.assertNotIn("0", result)
-        # Should either filter out or produce calculation error
-        self.assertTrue("error" in result.lower() or "no evaluable" in result.lower())
-
-    def test_calc_tool_wrapper(self):
-        res = calc.invoke({"expression": "100 * 1.2"})
-        self.assertEqual(res, "120")
+    @patch("src.agent.tools.db_connector")
+    def test_sql_db_query_empty_result(self, mock_db):
+        mock_db.is_connected = True
+        mock_db.execute_query.return_value = {
+            "status": "success",
+            "rows": [],
+            "count": 0
+        }
+        res = sql_db_query.invoke({"query": "SELECT * FROM users WHERE id = 999"})
+        self.assertIn("no matching rows", res.lower())
 
 
 if __name__ == "__main__":

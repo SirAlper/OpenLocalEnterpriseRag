@@ -1,4 +1,4 @@
-"""OpenLocalEnterpriseRag Package.
+"""OpenLocalRagAgents Package.
 
 Modular Architecture:
 - src.core: System configuration and environment settings

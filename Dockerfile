@@ -1,7 +1,7 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# OpenLocalEnterpriseRag — Enterprise Production Dockerfile
-# Multi-purpose container supporting FastAPI backend & Streamlit frontend
-# ─────────────────────────────────────────────────────────────────────────────
+# ==============================================================================
+# OpenLocalRagAgents — Enterprise Production Dockerfile
+# Multi-stage optimized build for Python 3.11 with CUDA / CPU PyTorch
+# ==============================================================================
 
 FROM python:3.11-slim
 

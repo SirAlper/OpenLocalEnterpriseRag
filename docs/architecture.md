@@ -1,6 +1,7 @@
 # 🏗️ System Architecture & Engineering Principles
 
-`OpenLocalEnterpriseRag` is built upon **Two-Stage Retrieval** and **Stateful Agentic AI (LangGraph)** workflows designed to execute 100% locally on private enterprise hardware without sending proprietary data to third-party cloud APIs.
+`OpenLocalRagAgents` is built upon **Two-Stage Retrieval** and **Stateful Agentic AI (LangGraph)** workflows designed to execute 100% locally on private enterprise hardware without sending proprietary data to third-party cloud APIs.
+
 
 ---
 

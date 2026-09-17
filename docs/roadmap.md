@@ -1,6 +1,6 @@
 # 🗺️ Project Roadmap
 
-The strategic development roadmap for `OpenLocalEnterpriseRag` is structured below to expand its capabilities as a world-class on-premise enterprise AI infrastructure.
+The strategic development roadmap for `OpenLocalRagAgents` is structured below to expand its capabilities as a world-class on-premise enterprise AI infrastructure.
 
 ---
 
@@ -29,8 +29,8 @@ The strategic development roadmap for `OpenLocalEnterpriseRag` is structured bel
   - SQLAlchemy-based connector layer supporting PostgreSQL, MSSQL, MySQL, Oracle, and SQLite.
   - Strict read-only query guardrails, automatic `LIMIT` capping, and table whitelisting.
   - Table-to-vector ETL pipeline (`DatabaseTableLoader`) and agent tools (`sql_db_query`, `sql_db_schema`).
-- [ ] **Multi-Agent Supervisor Teams:**
-  - Supervisor pattern to route queries dynamically across specialized agents (Documentation Agent, SQL Data Agent, Mathematical Analyst).
+- [ ] **Multi-Agent Supervisor Teams (Upcoming):**
+  - Supervisor pattern to route queries dynamically across specialized agents (Documentation Agent, SQL Data Agent).
 - [ ] **User Feedback Loop:**
   - Thumbs up/down feedback widget in Streamlit UI to track and log answer ground truth metrics.
 
@@ -51,8 +51,9 @@ The strategic development roadmap for `OpenLocalEnterpriseRag` is structured bel
 
 ## 🏢 4. Enterprise Security, Governance & DevOps
 
-- [x] **Automated Testing Suite (32 Tests):**
+- [x] **Automated Testing Suite (30 Tests):**
   - Unit and integration tests covering LangGraph decision branches, read-only SQL guards, file upload security, and contextual document loader.
+
 - [x] **Defense-in-Depth API Security:**
   - Path traversal protection, file extension whitelisting, upload size limits, and configurable CORS origins.
 - [x] **Centralized Logging & Lifespan Architecture:**
