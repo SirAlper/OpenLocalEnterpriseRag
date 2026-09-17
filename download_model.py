@@ -7,7 +7,13 @@ os.environ["HF_HUB_OFFLINE"] = "0"
 os.environ["TRANSFORMERS_OFFLINE"] = "0"
 
 from huggingface_hub import snapshot_download
-from src.core.config import MODELS_DIR, LOCAL_LLM_PATH, LOCAL_EMBEDDING_PATH, LOCAL_RERANKER_PATH
+from src.core.config import (
+    MODELS_DIR,
+    LOCAL_LLM_PATH,
+    LOCAL_EMBEDDING_PATH,
+    LOCAL_RERANKER_PATH,
+    LLM_MODEL_ID,
+)
 
 os.makedirs(MODELS_DIR, exist_ok=True)
 
@@ -27,10 +33,10 @@ models = [
         "key_file": "config.json"
     },
     {
-        "name": "3/3 - Small Language Model (SLM - Qwen2.5-1.5B-Instruct)",
-        "repo_id": "Qwen/Qwen2.5-1.5B-Instruct",
+        "name": f"3/3 - Language Model ({LLM_MODEL_ID})",
+        "repo_id": LLM_MODEL_ID,
         "local_dir": LOCAL_LLM_PATH,
-        "est_size": "~3.1 GB",
+        "est_size": "~3.1 - ~15 GB",
         "key_file": "config.json"
     }
 ]

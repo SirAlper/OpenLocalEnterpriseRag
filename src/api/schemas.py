@@ -1,9 +1,15 @@
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class QueryRequest(BaseModel):
-    question: str
+    question: str = Field(..., min_length=1, max_length=4000, description="User question")
+    session_id: Optional[str] = Field(
+        None,
+        max_length=64,
+        pattern=r"^[a-zA-Z0-9_-]+$",
+        description="Alphanumeric session ID for conversation memory",
+    )
 
 
 class SyncTableRequest(BaseModel):

@@ -12,6 +12,8 @@ from src.core.config import (
     DATABASE_URL,
     SAMPLE_DB_PATH,
     ALLOWED_UPLOAD_EXTENSIONS,
+    LLM_BACKEND,
+    OLLAMA_NUM_PARALLEL,
 )
 from src.core.logger import get_logger
 
@@ -24,6 +26,30 @@ document_loader: Optional[DocumentLoader] = None
 db_connector: Optional[DatabaseConnector] = None
 db_loader: Optional[DatabaseTableLoader] = None
 query_lock = asyncio.Lock()
+ollama_semaphore = asyncio.Semaphore(OLLAMA_NUM_PARALLEL)
+
+
+class QueryConcurrencyManager:
+    """
+    Manages query concurrency depending on LLM backend:
+    - Ollama: allows up to OLLAMA_NUM_PARALLEL parallel requests.
+    - HuggingFace: serializes to 1 active inference to protect GPU/RAM.
+    """
+    async def __aenter__(self):
+        if LLM_BACKEND == "ollama":
+            await ollama_semaphore.acquire()
+        else:
+            await query_lock.acquire()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if LLM_BACKEND == "ollama":
+            ollama_semaphore.release()
+        else:
+            query_lock.release()
+
+
+query_concurrency_gate = QueryConcurrencyManager()
 
 
 def get_rag_engine() -> RAGEngine:

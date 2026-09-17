@@ -1,0 +1,188 @@
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+from src.auth.dependencies import get_current_user, require_role
+from src.auth.jwt_handler import create_access_token
+from src.auth.models import (
+    LoginRequest,
+    TokenResponse,
+    User,
+    UserCreate,
+    UserResponse,
+    UserUpdate,
+)
+from src.auth.user_store import user_store
+from src.core.audit import audit_logger
+from src.core.logger import get_logger
+
+logger = get_logger("API.Auth")
+router = APIRouter(prefix="/api/v1/auth", tags=["Authentication & Access Control"])
+
+
+@router.post("/login", response_model=TokenResponse)
+async def login(credentials: LoginRequest, http_req: Request):
+    """
+    Authenticate with username and password to obtain a JWT Bearer token.
+    """
+    ip_addr = http_req.client.host if http_req.client else None
+    user = user_store.authenticate_user(credentials.username, credentials.password)
+    if not user:
+        audit_logger.log(
+            username=credentials.username,
+            role="unknown",
+            action="login",
+            detail="Failed login attempt (invalid credentials)",
+            ip_address=ip_addr,
+            status="denied",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token, expires_in = create_access_token(user.username, user.role)
+    audit_logger.log(
+        username=user.username,
+        role=user.role,
+        action="login",
+        detail="Successful authentication",
+        ip_address=ip_addr,
+        status="success",
+    )
+    logger.info(f"User '{user.username}' logged in successfully (role: {user.role}).")
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        role=user.role,
+        username=user.username,
+        expires_in=expires_in,
+    )
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_my_profile(current_user: User = Depends(get_current_user)):
+    """
+    Get profile information of currently authenticated user.
+    """
+    return UserResponse(
+        username=current_user.username,
+        role=current_user.role,
+        disabled=current_user.disabled,
+        created_at=current_user.created_at,
+    )
+
+
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def register_user(
+    new_user_data: UserCreate,
+    current_admin: User = Depends(require_role("admin")),
+):
+    """
+    Register a new user (Admin only).
+    """
+    try:
+        created = user_store.create_user(
+            username=new_user_data.username,
+            password=new_user_data.password,
+            role=new_user_data.role,
+        )
+        audit_logger.log(
+            username=current_admin.username,
+            role=current_admin.role,
+            action="register_user",
+            detail=f"Created user '{created.username}' with role '{created.role}'",
+            status="success",
+        )
+        return UserResponse(
+            username=created.username,
+            role=created.role,
+            disabled=created.disabled,
+            created_at=created.created_at,
+        )
+    except ValueError as e:
+        audit_logger.log(
+            username=current_admin.username,
+            role=current_admin.role,
+            action="register_user",
+            detail=f"Failed to create user '{new_user_data.username}': {e}",
+            status="error",
+        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/users", response_model=List[UserResponse])
+async def list_all_users(_: User = Depends(require_role("admin"))):
+    """
+    List all registered users (Admin only).
+    """
+    return user_store.list_users()
+
+
+@router.patch("/users/{username}", response_model=UserResponse)
+async def update_user(
+    username: str,
+    update_data: UserUpdate,
+    current_admin: User = Depends(require_role("admin")),
+):
+    """
+    Update user status, role, or reset password (Admin only).
+    """
+    updated = user_store.update_user(
+        username=username,
+        password=update_data.password,
+        role=update_data.role,
+        disabled=update_data.disabled,
+    )
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User '{username}' not found.",
+        )
+    audit_logger.log(
+        username=current_admin.username,
+        role=current_admin.role,
+        action="update_user",
+        detail=f"Updated user '{username}' (role: {updated.role}, disabled: {updated.disabled})",
+        status="success",
+    )
+    return UserResponse(
+        username=updated.username,
+        role=updated.role,
+        disabled=updated.disabled,
+        created_at=updated.created_at,
+    )
+
+
+@router.delete("/users/{username}")
+async def delete_user(
+    username: str,
+    current_admin: User = Depends(require_role("admin")),
+):
+    """
+    Delete a user account (Admin only).
+    """
+    try:
+        success = user_store.delete_user(username)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User '{username}' not found.",
+            )
+        audit_logger.log(
+            username=current_admin.username,
+            role=current_admin.role,
+            action="delete_user",
+            detail=f"Deleted user '{username}'",
+            status="success",
+        )
+        return {"status": "success", "message": f"User '{username}' deleted."}
+    except ValueError as e:
+        audit_logger.log(
+            username=current_admin.username,
+            role=current_admin.role,
+            action="delete_user",
+            detail=f"Failed to delete user '{username}': {e}",
+            status="error",
+        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
