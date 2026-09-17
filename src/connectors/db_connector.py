@@ -3,6 +3,9 @@ import os
 import sqlite3
 from typing import Optional, Dict, Any, List
 from src.core.config import DATABASE_URL, DB_ALLOWED_TABLES, DB_MAX_ROWS, SAMPLE_DB_PATH
+from src.core.logger import get_logger
+
+logger = get_logger("DatabaseConnector")
 
 
 class DatabaseConnector:
@@ -51,7 +54,7 @@ class DatabaseConnector:
             self.engine = None
             self.is_connected = False
             self._last_error = str(e)
-            print(f"[DatabaseConnector] Failed to connect: {e}")
+            logger.error(f"Failed to connect to database: {e}")
 
     def test_connection(self) -> Dict[str, Any]:
         """Test database connection, return dialect and accessible tables."""
@@ -180,6 +183,19 @@ class DatabaseConnector:
                 "columns": [],
                 "rows": []
             }
+
+        # 3. Table Access Restriction (if allowed_tables is specified)
+        if self.allowed_tables:
+            referenced_tables = re.findall(r"\b(?:FROM|JOIN)\s+([a-zA-Z0-9_]+)", clean_query, re.IGNORECASE)
+            for tbl in referenced_tables:
+                if tbl not in self.allowed_tables:
+                    logger.warning(f"Unauthorized table access attempt: '{tbl}' in query: '{clean_query}'")
+                    return {
+                        "status": "error",
+                        "message": f"Security Guard: Access to table '{tbl}' is not permitted.",
+                        "columns": [],
+                        "rows": []
+                    }
 
         try:
             from sqlalchemy import text

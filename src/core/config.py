@@ -1,9 +1,25 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 VECTOR_DB_PATH = os.path.join(BASE_DIR, "vector_db")
 DOCS_PATH = os.path.join(BASE_DIR, "data")
+
+# ──────────────────────────── API & SECURITY CONFIGURATION ────────────────────────────
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:8501,http://127.0.0.1:8501").split(",")
+    if origin.strip()
+]
+MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
+ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".docx", ".txt"}
+
+# ──────────────────────────── LOGGING CONFIGURATION ────────────────────────────
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+LOG_FILE = os.getenv("LOG_FILE", os.path.join(BASE_DIR, "app.log"))
 
 LOCAL_LLM_PATH = os.path.join(MODELS_DIR, "qwen2.5-1.5b")
 LOCAL_EMBEDDING_PATH = os.path.join(MODELS_DIR, "bge-m3")

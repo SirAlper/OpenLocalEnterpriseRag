@@ -1,4 +1,5 @@
 import os
+import sys
 
 # Enable Hugging Face Hub online access for model downloading
 os.environ["ALLOW_ONLINE_HF"] = "1"
@@ -14,28 +15,73 @@ models = [
     {
         "name": "1/3 - Multilingual Embedding Model (BAAI/bge-m3)",
         "repo_id": "BAAI/bge-m3",
-        "local_dir": LOCAL_EMBEDDING_PATH
+        "local_dir": LOCAL_EMBEDDING_PATH,
+        "est_size": "~2.2 GB",
+        "key_file": "config.json"
     },
     {
         "name": "2/3 - Cross-Encoder Reranker Model (BAAI/bge-reranker-v2-m3)",
         "repo_id": "BAAI/bge-reranker-v2-m3",
-        "local_dir": LOCAL_RERANKER_PATH
+        "local_dir": LOCAL_RERANKER_PATH,
+        "est_size": "~1.1 GB",
+        "key_file": "config.json"
     },
     {
         "name": "3/3 - Small Language Model (SLM - Qwen2.5-1.5B-Instruct)",
         "repo_id": "Qwen/Qwen2.5-1.5B-Instruct",
-        "local_dir": LOCAL_LLM_PATH
+        "local_dir": LOCAL_LLM_PATH,
+        "est_size": "~3.1 GB",
+        "key_file": "config.json"
     }
 ]
 
-if __name__ == "__main__":
-    for item in models:
-        print(f"\nDownloading / Verifying: {item['name']} -> {item['local_dir']}...")
-        snapshot_download(
-            repo_id=item["repo_id"],
-            local_dir=item["local_dir"],
-            resume_download=True,
-            ignore_patterns=["*.onnx", "*.onnx_data", "onnx/*", "imgs/*", "*.jpg", "*.png"]
-        )
+force_download = os.getenv("FORCE_DOWNLOAD", "0") == "1"
 
-    print("\nModels successfully saved to './models' directory! The system can now run in offline/air-gapped mode.")
+if __name__ == "__main__":
+    print("=" * 70)
+    print("  Enterprise Local RAG — Model Downloader & Verification Utility")
+    print(f"  Target Storage Directory: {os.path.abspath(MODELS_DIR)}")
+    print("  Total Estimated Space Required: ~6.4 GB")
+    print("=" * 70)
+
+    download_failures = []
+
+    for item in models:
+        key_file_path = os.path.join(item["local_dir"], item["key_file"])
+        already_exists = os.path.exists(key_file_path)
+
+        if already_exists and not force_download:
+            print(f"\n[SKIP] {item['name']}")
+            print(f"       Already verified at: {item['local_dir']}")
+            print("       (Set FORCE_DOWNLOAD=1 environment variable to force re-download)")
+            continue
+
+        print(f"\n[DOWNLOADING] {item['name']} (Estimated size: {item['est_size']})")
+        print(f"              Destination: {item['local_dir']}...")
+
+        try:
+            snapshot_download(
+                repo_id=item["repo_id"],
+                local_dir=item["local_dir"],
+                resume_download=True,
+                ignore_patterns=["*.onnx", "*.onnx_data", "onnx/*", "imgs/*", "*.jpg", "*.png"]
+            )
+            print(f"[SUCCESS] {item['name']} ready.")
+        except KeyboardInterrupt:
+            print("\n[CANCELLED] Download interrupted by user.")
+            sys.exit(1)
+        except Exception as e:
+            print(f"[ERROR] Failed to download {item['repo_id']}: {e}")
+            download_failures.append((item["name"], str(e)))
+
+    print("\n" + "=" * 70)
+    if download_failures:
+        print(f"❌ {len(download_failures)} model(s) failed to download:")
+        for name, err in download_failures:
+            print(f"   - {name}: {err}")
+        print("\nPlease check your internet connection or HuggingFace access and retry.")
+        sys.exit(1)
+    else:
+        print("✅ All models verified and available in './models' directory!")
+        print("   The system can now operate in full offline/air-gapped mode.")
+    print("=" * 70)

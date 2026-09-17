@@ -59,34 +59,47 @@ class QueryService:
         generate_out = self.nodes.generate(state)
         state["answer"] = generate_out["answer"]
 
-        # 3. GRADE (Hallucination Audit)
-        yield {"type": "status", "message": "🛡️ Verifying factual accuracy...", "node": "grade"}
-        grade_out = self.nodes.grade_hallucination(state)
-        state["hallucination_grade"] = grade_out["hallucination_grade"]
+        # 3. GRADE & REFINE LOOP
+        while True:
+            yield {"type": "status", "message": "🛡️ Verifying factual accuracy...", "node": "grade"}
+            grade_out = self.nodes.grade_hallucination(state)
+            state["hallucination_grade"] = grade_out["hallucination_grade"]
 
-        decision = self.nodes.decide_hallucinate(state)
-        if decision == "refine":
-            yield {
-                "type": "status",
-                "message": "✍️ Re-evaluating and refining response to match documents...",
-                "node": "refine"
-            }
-            refine_out = self.nodes.refine(state)
-            state["answer"] = refine_out["answer"]
-            state["is_refined"] = True
-            state["retry_count"] = refine_out["retry_count"]
-            yield {"type": "grade", "grade": state["hallucination_grade"], "passed": True, "is_refined": True}
-        elif decision == "fallback":
-            yield {
-                "type": "warning",
-                "message": "⚠️ Generated response could not be fully verified against company documents.",
-                "node": "fallback"
-            }
-            fallback_out = self.nodes.fallback(state)
-            state["answer"] = fallback_out["answer"]
-            yield {"type": "grade", "grade": state["hallucination_grade"], "passed": False, "is_refined": False}
-        else:
-            yield {"type": "grade", "grade": state["hallucination_grade"], "passed": True, "is_refined": False}
+            decision = self.nodes.decide_hallucinate(state)
+            if decision == "refine":
+                yield {
+                    "type": "status",
+                    "message": "✍️ Re-evaluating and refining response to match documents...",
+                    "node": "refine"
+                }
+                refine_out = self.nodes.refine(state)
+                state["answer"] = refine_out["answer"]
+                state["is_refined"] = True
+                state["retry_count"] = refine_out.get("retry_count", state.get("retry_count", 0) + 1)
+                continue
+            elif decision == "fallback":
+                yield {
+                    "type": "warning",
+                    "message": "⚠️ Generated response could not be fully verified against company documents.",
+                    "node": "fallback"
+                }
+                fallback_out = self.nodes.fallback(state)
+                state["answer"] = fallback_out["answer"]
+                yield {
+                    "type": "grade",
+                    "grade": state["hallucination_grade"],
+                    "passed": False,
+                    "is_refined": state.get("is_refined", False)
+                }
+                break
+            else:
+                yield {
+                    "type": "grade",
+                    "grade": state["hallucination_grade"],
+                    "passed": True,
+                    "is_refined": state.get("is_refined", False)
+                }
+                break
 
         yield {
             "type": "done",

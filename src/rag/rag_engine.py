@@ -1,8 +1,12 @@
 import os
+from typing import List, Dict, Any, Optional
 import torch
 from sentence_transformers import SentenceTransformer, CrossEncoder
 import chromadb
 from src.core.config import EMBEDDING_MODEL_NAME, RERANKER_MODEL_NAME, VECTOR_DB_PATH, RERANKER_TOP_N, RAG_DEVICE
+from src.core.logger import get_logger
+
+logger = get_logger("RAGEngine")
 
 
 class RAGEngine:
@@ -10,16 +14,16 @@ class RAGEngine:
 
     def __init__(self):
         device = RAG_DEVICE
-        print(f"[RAG Engine] Running Embedding and Reranker on '{device}'...")
+        logger.info(f"Running Embedding and Reranker on '{device}'...")
 
         # Multilingual Embedding Model (BAAI/bge-m3)
         is_local_embed = os.path.exists(EMBEDDING_MODEL_NAME)
-        print(f"Loading Embedding Model ({EMBEDDING_MODEL_NAME.split(os.sep)[-1]})...")
+        logger.info(f"Loading Embedding Model ({EMBEDDING_MODEL_NAME.split(os.sep)[-1]})...")
         self.embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME, device=device, local_files_only=is_local_embed)
 
         # Cross-Encoder Reranker Model (BAAI/bge-reranker-v2-m3)
         is_local_reranker = os.path.exists(RERANKER_MODEL_NAME)
-        print(f"Loading Reranker Model ({RERANKER_MODEL_NAME.split(os.sep)[-1]})...")
+        logger.info(f"Loading Reranker Model ({RERANKER_MODEL_NAME.split(os.sep)[-1]})...")
         self.reranker = CrossEncoder(
             RERANKER_MODEL_NAME,
             max_length=512,
@@ -27,14 +31,14 @@ class RAGEngine:
             local_files_only=is_local_reranker
         )
 
-        print("Initializing local vector store (ChromaDB)...")
+        logger.info("Initializing local vector store (ChromaDB)...")
         self.client = chromadb.PersistentClient(path=VECTOR_DB_PATH)
         self.collection = self.client.get_or_create_collection(name="enterprise_docs")
 
-    def add_documents(self, documents: list[str], ids: list[str], metadatas: list[dict] = None):
+    def add_documents(self, documents: List[str], ids: List[str], metadatas: Optional[List[Dict[str, Any]]] = None):
         """Vectorize new document chunks and store them in ChromaDB."""
         if not documents:
-            print("[RAG Engine] No documents to add.")
+            logger.warning("No documents to add.")
             return
 
         embeddings = self.embedding_model.encode(documents, show_progress_bar=True).tolist()
@@ -45,7 +49,7 @@ class RAGEngine:
             ids=ids,
             metadatas=metadatas
         )
-        print(f"[RAG Engine] Successfully indexed {len(documents)} chunks.")
+        logger.info(f"Successfully indexed {len(documents)} chunks.")
 
     def delete_document(self, filename: str) -> int:
         """Delete all chunks belonging to the specified file from ChromaDB."""
@@ -54,11 +58,11 @@ class RAGEngine:
             ids = results.get("ids", [])
             if ids:
                 self.collection.delete(ids=ids)
-                print(f"[RAG Engine] Deleted {len(ids)} chunks belonging to '{filename}'.")
+                logger.info(f"Deleted {len(ids)} chunks belonging to '{filename}'.")
                 return len(ids)
             return 0
         except Exception as e:
-            print(f"[RAG Engine] Error during chunk deletion: {e}")
+            logger.error(f"Error during chunk deletion: {e}")
             return 0
 
     def get_stats(self) -> dict:

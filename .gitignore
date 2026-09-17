@@ -10,6 +10,8 @@ __pycache__/
 *$py.class
 *.so
 .pytest_cache/
+*.log
+logs/
 
 # Hassas Kurumsal Veriler ve Vektör Tabanı
 vector_db/

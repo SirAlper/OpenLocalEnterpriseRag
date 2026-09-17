@@ -28,7 +28,7 @@ The system is engineered to run the multilingual embedding model, Cross-Encoder 
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-username/OpenLocalEnterpriseRag.git
+git clone https://github.com/SirAlper/OpenLocalEnterpriseRag.git
 cd OpenLocalEnterpriseRag
 ```
 

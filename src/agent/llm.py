@@ -3,6 +3,9 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, pipeline
 from langchain_huggingface import ChatHuggingFace, HuggingFacePipeline
 from src.core.config import LLM_MODEL_NAME, USE_4BIT_QUANTIZATION
+from src.core.logger import get_logger
+
+logger = get_logger("LLM")
 
 
 def create_chat_model() -> ChatHuggingFace:
@@ -15,7 +18,7 @@ def create_chat_model() -> ChatHuggingFace:
     """
     is_cuda = torch.cuda.is_available()
     device_str = "CUDA GPU" if is_cuda else "CPU"
-    print(f"Loading local LLM ({LLM_MODEL_NAME}) on {device_str}...")
+    logger.info(f"Loading local LLM ({LLM_MODEL_NAME}) on {device_str}...")
 
     is_local = os.path.exists(LLM_MODEL_NAME)
     tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_NAME, local_files_only=is_local)
@@ -25,7 +28,7 @@ def create_chat_model() -> ChatHuggingFace:
     torch_dtype = torch.bfloat16 if is_cuda else torch.float32
 
     if is_cuda and USE_4BIT_QUANTIZATION:
-        print("[PyTorch] Enabling 4-bit (NF4) quantization...")
+        logger.info("[PyTorch] Enabling 4-bit (NF4) quantization...")
         quantization_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
@@ -46,7 +49,7 @@ def create_chat_model() -> ChatHuggingFace:
     model = AutoModelForCausalLM.from_pretrained(LLM_MODEL_NAME, **model_kwargs)
 
     # HuggingFace Pipeline -> LangChain ChatModel conversion
-    print("[LangChain] Creating HuggingFace Pipeline...")
+    logger.info("[LangChain] Creating HuggingFace Pipeline...")
     pipe = pipeline(
         "text-generation",
         model=model,
@@ -58,6 +61,6 @@ def create_chat_model() -> ChatHuggingFace:
     )
     hf_llm = HuggingFacePipeline(pipeline=pipe)
     chat_model = ChatHuggingFace(llm=hf_llm)
-    print("[LangChain] ChatHuggingFace model initialized successfully.")
+    logger.info("[LangChain] ChatHuggingFace model initialized successfully.")
 
     return chat_model

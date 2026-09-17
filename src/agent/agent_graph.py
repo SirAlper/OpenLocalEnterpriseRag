@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import TypedDict, List, Dict, Any
 from langgraph.graph import StateGraph, END
 from src.agent.llm import create_chat_model
 from src.rag.rag_engine import RAGEngine
@@ -9,7 +9,7 @@ from src.agent.query_service import QueryService
 class AgentState(TypedDict):
     question: str
     context: str
-    sources: list[dict]
+    sources: List[Dict[str, Any]]
     answer: str
     hallucination_grade: str
     retry_count: int
@@ -44,7 +44,7 @@ class EnterpriseRAGAgent:
             self.nodes.decide_hallucinate,
             {"end": END, "refine": "refine", "fallback": "fallback"}
         )
-        workflow.add_edge("refine", END)
+        workflow.add_edge("refine", "grade")
         workflow.add_edge("fallback", END)
 
         return workflow.compile()

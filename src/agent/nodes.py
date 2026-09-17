@@ -5,6 +5,9 @@ from src.agent.prompts import (
     build_rag_messages, build_grader_messages, build_refine_messages,
     NO_CONTEXT_RESPONSE, FALLBACK_RESPONSE
 )
+from src.core.logger import get_logger
+
+logger = get_logger("AgentNodes")
 
 
 class AgentNodes:
@@ -22,7 +25,7 @@ class AgentNodes:
     def retrieve(self, state: dict) -> dict:
         """Search vector database and reranker for the most relevant document chunks."""
         question = state["question"].strip()
-        print(f"[LangGraph Node: retrieve] Searching documents for: '{question}'...")
+        logger.info(f"[retrieve] Searching documents for: '{question}'...")
         search_result = self.rag_engine.search(question)
         return {
             "context": search_result.get("context", ""),
@@ -31,7 +34,7 @@ class AgentNodes:
 
     def generate(self, state: dict) -> dict:
         """Generate enterprise RAG response using ChatHuggingFace."""
-        print("[LangGraph Node: generate] Generating response...")
+        logger.info("[generate] Generating response...")
         context = state.get("context", "").strip()
         if not context:
             return {"answer": NO_CONTEXT_RESPONSE}
@@ -42,7 +45,7 @@ class AgentNodes:
 
     def grade_hallucination(self, state: dict) -> dict:
         """Audit the fidelity of the generated answer against the retrieved context."""
-        print("[LangGraph Node: grade] Auditing answer for hallucinations...")
+        logger.info("[grade] Auditing answer for hallucinations...")
         context = state.get("context", "").strip()
         if not context:
             return {"hallucination_grade": "yes"}
@@ -50,12 +53,12 @@ class AgentNodes:
         messages = build_grader_messages(context, state["question"], state.get("answer", ""))
         response = self.chat_model.invoke(messages)
         grade = response.content.strip()
-        print(f"[LangGraph Node: grade] Audit result: '{grade}'")
+        logger.info(f"[grade] Audit result: '{grade}'")
         return {"hallucination_grade": grade}
 
     def refine(self, state: dict) -> dict:
         """Prune and re-evaluate draft answers that contain unverified or speculative statements."""
-        print("[LangGraph Node: refine] Rethinking and refining response to match context...")
+        logger.info("[refine] Rethinking and refining response to match context...")
         context = state.get("context", "").strip()
         question = state.get("question", "").strip()
         draft_answer = state.get("answer", "").strip()
@@ -66,7 +69,7 @@ class AgentNodes:
         messages = build_refine_messages(context, question, draft_answer)
         response = self.chat_model.invoke(messages)
         refined_answer = response.content.strip()
-        print("[LangGraph Node: refine] Response successfully refined.")
+        logger.info("[refine] Response successfully refined.")
 
         return {
             "answer": refined_answer,
@@ -76,7 +79,7 @@ class AgentNodes:
 
     def fallback(self, state: dict) -> dict:
         """Provide a safe fallback answer when factual consistency cannot be verified."""
-        print("[LangGraph Node: fallback] Safe fallback triggered!")
+        logger.warning("[fallback] Safe fallback triggered!")
         return {"answer": FALLBACK_RESPONSE}
 
     # ──────────────────────────── CONDITIONAL EDGES ────────────────────────────
@@ -90,8 +93,8 @@ class AgentNodes:
 
         # If not refined previously (retry_count < 1), route to refine node
         if state.get("retry_count", 0) < 1:
-            print("[LangGraph Decision] Hallucination suspected: Routing to refine node.")
+            logger.info("[decide] Hallucination suspected: Routing to refine node.")
             return "refine"
 
-        print("[LangGraph Decision] Max retries reached: Routing to fallback node.")
+        logger.warning("[decide] Max retries reached: Routing to fallback node.")
         return "fallback"

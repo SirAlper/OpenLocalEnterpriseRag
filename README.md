@@ -42,7 +42,7 @@ Explore our detailed architectural and operational guides:
 
 ### 1. Clone Repository & Install Dependencies
 ```bash
-git clone https://github.com/your-username/OpenLocalEnterpriseRag.git
+git clone https://github.com/SirAlper/OpenLocalEnterpriseRag.git
 cd OpenLocalEnterpriseRag
 
 # Create and activate virtual environment

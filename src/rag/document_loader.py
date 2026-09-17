@@ -3,6 +3,9 @@ import re
 from pypdf import PdfReader
 from docx import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from src.core.logger import get_logger
+
+logger = get_logger("DocumentLoader")
 
 
 class DocumentLoader:
@@ -54,7 +57,7 @@ class DocumentLoader:
                     text += content + "\n"
             return text
         except Exception as e:
-            print(f"[DocumentLoader] PDF read error ({os.path.basename(file_path)}): {e}")
+            logger.error(f"PDF read error ({os.path.basename(file_path)}): {e}")
             return ""
 
     def _read_docx(self, file_path: str) -> str:
@@ -62,7 +65,7 @@ class DocumentLoader:
             doc = Document(file_path)
             return "\n".join([p.text for p in doc.paragraphs if p.text])
         except Exception as e:
-            print(f"[DocumentLoader] DOCX read error ({os.path.basename(file_path)}): {e}")
+            logger.error(f"DOCX read error ({os.path.basename(file_path)}): {e}")
             return ""
 
     def _read_txt(self, file_path: str) -> str:
@@ -74,10 +77,10 @@ class DocumentLoader:
                 with open(file_path, "r", encoding="cp1254", errors="replace") as f:
                     return f.read()
             except Exception as e:
-                print(f"[DocumentLoader] TXT read error ({os.path.basename(file_path)}): {e}")
+                logger.error(f"TXT read error ({os.path.basename(file_path)}): {e}")
                 return ""
         except Exception as e:
-            print(f"[DocumentLoader] TXT read error ({os.path.basename(file_path)}): {e}")
+            logger.error(f"TXT read error ({os.path.basename(file_path)}): {e}")
             return ""
 
     def load_and_chunk_file(self, file_path: str):
@@ -100,7 +103,7 @@ class DocumentLoader:
         elif ext == ".txt":
             content = self._read_txt(file_path)
         else:
-            print(f"[DocumentLoader] Skipping unsupported file format: {filename}")
+            logger.warning(f"Skipping unsupported file format: {filename}")
             return chunks, ids, metadatas
 
         if not content.strip():

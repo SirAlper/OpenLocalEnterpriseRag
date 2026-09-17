@@ -1,5 +1,8 @@
 from typing import List, Dict, Any, Tuple, Optional
 from src.connectors.db_connector import DatabaseConnector
+from src.core.logger import get_logger
+
+logger = get_logger("DatabaseTableLoader")
 
 
 class DatabaseTableLoader:
@@ -21,12 +24,22 @@ class DatabaseTableLoader:
         metadatas = []
 
         if not self.db.is_connected or not self.db.engine:
-            print("[DatabaseTableLoader] No active database connection.")
+            logger.warning("No active database connection.")
+            return chunks, ids, metadatas
+
+        # Security check: table_name must be a valid identifier and present in accessible tables
+        if not table_name or not table_name.isidentifier():
+            logger.error(f"Invalid or unsafe table name format: '{table_name}'")
+            return chunks, ids, metadatas
+
+        accessible_tables = self.db.get_tables()
+        if table_name not in accessible_tables:
+            logger.error(f"Table '{table_name}' is not in accessible tables: {accessible_tables}")
             return chunks, ids, metadatas
 
         query_result = self.db.execute_query(f"SELECT * FROM {table_name}")
         if query_result["status"] != "success":
-            print(f"[DatabaseTableLoader] Query error: {query_result.get('message')}")
+            logger.error(f"Query error: {query_result.get('message')}")
             return chunks, ids, metadatas
 
         rows = query_result.get("rows", [])
