@@ -40,11 +40,21 @@ FALLBACK_RESPONSE = "This information cannot be fully verified against company d
 
 # ──────────────────────────── MESSAGE BUILDERS ────────────────────────────
 
-def build_rag_messages(context: str, question: str) -> list:
+def build_rag_messages(context: str, question: str, chat_history: list = None) -> list:
     """Build LangChain message list for enterprise RAG response generation."""
+    history_str = ""
+    if chat_history:
+        history_lines = [
+            f"User: {turn.get('question', '')}\nAssistant: {turn.get('answer', '')}"
+            for turn in chat_history[-3:]
+            if turn.get('question') and turn.get('answer')
+        ]
+        if history_lines:
+            history_str = "Recent Conversation History:\n" + "\n".join(history_lines) + "\n\n"
+
     return [
         SystemMessage(content=SYSTEM_PROMPT_RAG),
-        HumanMessage(content=f"Context:\n{context}\n\nQuestion: {question}")
+        HumanMessage(content=f"{history_str}Context:\n{context}\n\nQuestion: {question}")
     ]
 
 

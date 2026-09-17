@@ -9,17 +9,26 @@ The interactive OpenAPI Swagger UI is available at `http://localhost:8000/docs` 
 
 ## 📋 Endpoints Overview
 
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/v1/stats` | Hardware (CUDA/CPU), model paths, and vector store statistics |
-| `GET` | `/api/v1/documents` | List uploaded and indexed enterprise documents |
-| `POST` | `/api/v1/upload-file` | Upload new PDF, DOCX, or TXT document and auto-index |
-| `DELETE` | `/api/v1/documents/{filename}` | Permanently delete document from disk and vector store |
-| `POST` | `/api/v1/query` | Batch question answering with verified sources and audit state |
-| `POST` | `/api/v1/query-stream` | Stage event streaming (NDJSON protocol) with final answer |
-| `GET` | `/api/v1/database/status` | Database connection status, dialect type, and schema summary |
-| `POST` | `/api/v1/database/test-query` | Execute safe read-only SELECT queries |
-| `POST` | `/api/v1/database/sync-table` | Convert database table into ChromaDB vector chunks |
+| Method | Endpoint | Required Role | Description |
+| :--- | :--- | :---: | :--- |
+| `POST` | `/api/v1/auth/login` | Public | Obtain signed JWT Bearer access token |
+| `GET` | `/api/v1/auth/me` | Authenticated | View current authenticated user profile |
+| `POST` | `/api/v1/auth/register` | `admin` | Register new user account |
+| `GET` | `/api/v1/auth/users` | `admin` | List registered user accounts |
+| `GET` | `/api/v1/stats` | Any User | Hardware, active models, backend info, and index counts |
+| `GET` | `/api/v1/documents` | Any User | List uploaded and indexed enterprise documents |
+| `POST` | `/api/v1/upload-file` | `admin`, `editor` | Upload new PDF, DOCX, or TXT document and auto-index |
+| `DELETE` | `/api/v1/documents/{filename}` | `admin`, `editor` | Permanently delete document from disk and vector store |
+| `POST` | `/api/v1/query` | Any User | Batch question answering with multi-turn session memory |
+| `POST` | `/api/v1/query-stream` | Any User | Stage event streaming (NDJSON protocol) with final answer |
+| `GET` | `/api/v1/database/status` | Any User | Database connection status, dialect type, and schema summary |
+| `POST` | `/api/v1/database/test-query` | `admin` | Execute safe read-only SELECT queries |
+| `POST` | `/api/v1/database/sync-table` | `admin` | Convert database table into ChromaDB vector chunks |
+| `GET` | `/api/v1/admin/audit-logs` | `admin` | Filter and inspect compliance audit logs |
+| `GET` | `/api/v1/admin/audit-stats` | `admin` | Metrics summary (queries, uploads, logins, errors) |
+
+> [!NOTE]
+> All protected endpoints require `Authorization: Bearer <token>` in the HTTP request headers.
 
 ---
 

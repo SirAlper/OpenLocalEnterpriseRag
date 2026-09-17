@@ -16,6 +16,9 @@ services:
       - MAX_UPLOAD_SIZE_MB=50
       - LOG_LEVEL=INFO
       - ALLOW_ONLINE_HF=0
+      - LLM_BACKEND=huggingface
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=qwen2.5:7b
     volumes:
       - ./models:/app/models
       - ./data:/app/data
@@ -58,6 +61,26 @@ services:
     networks:
       - rag_network
 
+  # ───────────────────────────────────────────────────────────────────────────
+  # Optional: Ollama Serving Engine for High Concurrency (7B / 14B Models)
+  # Run with: docker compose --profile ollama up
+  # ───────────────────────────────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag_agents_ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - rag_network
+    profiles:
+      - ollama
+
 networks:
   rag_network:
     driver: bridge
+
+volumes:
+  ollama_data:

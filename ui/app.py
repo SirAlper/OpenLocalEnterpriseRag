@@ -1,4 +1,5 @@
 import os
+import uuid
 import streamlit as st
 import requests
 import json
@@ -11,7 +12,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
 
 # Custom styling
 st.markdown("""
@@ -41,14 +41,67 @@ st.markdown("""
         border-left: 3px solid #009688;
         font-size: 0.9rem;
     }
+    .role-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .role-admin { background-color: #dc3545; color: white; }
+    .role-editor { background-color: #0d6efd; color: white; }
+    .role-viewer { background-color: #198754; color: white; }
 </style>
 """, unsafe_allow_html=True)
 
 
-# API Helper Functions
+# --- AUTHENTICATION STATE & HELPERS ---
+if "auth_token" not in st.session_state:
+    st.session_state.auth_token = None
+if "user_info" not in st.session_state:
+    st.session_state.user_info = None
+
+
+def get_auth_headers():
+    token = st.session_state.get("auth_token")
+    if token:
+        return {"Authorization": f"Bearer {token}"}
+    return {}
+
+
+def login_api(username, password):
+    try:
+        res = requests.post(
+            f"{API_BASE_URL}/api/v1/auth/login",
+            json={"username": username, "password": password},
+            timeout=10,
+        )
+        if res.status_code == 200:
+            data = res.json()
+            st.session_state.auth_token = data["access_token"]
+            st.session_state.user_info = {
+                "username": data["username"],
+                "role": data["role"]
+            }
+            return True, "Login successful!"
+        else:
+            detail = res.json().get("detail", "Invalid username or password.")
+            return False, detail
+    except Exception as e:
+        return False, f"Connection error: {e}"
+
+
+def logout():
+    st.session_state.auth_token = None
+    st.session_state.user_info = None
+    st.rerun()
+
+
+# --- API HELPER FUNCTIONS ---
 def fetch_stats():
     try:
-        res = requests.get(f"{API_BASE_URL}/api/v1/stats", timeout=5)
+        res = requests.get(f"{API_BASE_URL}/api/v1/stats", headers=get_auth_headers(), timeout=5)
         if res.status_code == 200:
             return res.json()
     except Exception:
@@ -58,7 +111,7 @@ def fetch_stats():
 
 def fetch_documents():
     try:
-        res = requests.get(f"{API_BASE_URL}/api/v1/documents", timeout=5)
+        res = requests.get(f"{API_BASE_URL}/api/v1/documents", headers=get_auth_headers(), timeout=5)
         if res.status_code == 200:
             return res.json().get("documents", [])
     except Exception:
@@ -69,7 +122,12 @@ def fetch_documents():
 def upload_document(uploaded_file):
     try:
         files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
-        res = requests.post(f"{API_BASE_URL}/api/v1/upload-file", files=files, timeout=60)
+        res = requests.post(
+            f"{API_BASE_URL}/api/v1/upload-file",
+            headers=get_auth_headers(),
+            files=files,
+            timeout=60,
+        )
         return res.status_code == 200, res.json().get("message", "Unknown response.")
     except Exception as e:
         return False, str(e)
@@ -77,7 +135,11 @@ def upload_document(uploaded_file):
 
 def delete_document_api(filename):
     try:
-        res = requests.delete(f"{API_BASE_URL}/api/v1/documents/{filename}", timeout=10)
+        res = requests.delete(
+            f"{API_BASE_URL}/api/v1/documents/{filename}",
+            headers=get_auth_headers(),
+            timeout=10,
+        )
         return res.status_code == 200, res.json().get("message", "Deleted.")
     except Exception as e:
         return False, str(e)
@@ -85,7 +147,35 @@ def delete_document_api(filename):
 
 def fetch_database_status():
     try:
-        res = requests.get(f"{API_BASE_URL}/api/v1/database/status", timeout=5)
+        res = requests.get(f"{API_BASE_URL}/api/v1/database/status", headers=get_auth_headers(), timeout=5)
+        if res.status_code == 200:
+            return res.json()
+    except Exception:
+        return None
+    return None
+
+
+def fetch_audit_logs(limit=20):
+    try:
+        res = requests.get(
+            f"{API_BASE_URL}/api/v1/admin/audit-logs?limit={limit}",
+            headers=get_auth_headers(),
+            timeout=5,
+        )
+        if res.status_code == 200:
+            return res.json().get("logs", [])
+    except Exception:
+        return []
+    return []
+
+
+def fetch_audit_stats():
+    try:
+        res = requests.get(
+            f"{API_BASE_URL}/api/v1/admin/audit-stats",
+            headers=get_auth_headers(),
+            timeout=5,
+        )
         if res.status_code == 200:
             return res.json()
     except Exception:
@@ -95,7 +185,12 @@ def fetch_database_status():
 
 def sync_table_api(table_name):
     try:
-        res = requests.post(f"{API_BASE_URL}/api/v1/database/sync-table", json={"table_name": table_name}, timeout=60)
+        res = requests.post(
+            f"{API_BASE_URL}/api/v1/database/sync-table",
+            headers=get_auth_headers(),
+            json={"table_name": table_name},
+            timeout=60,
+        )
         return res.status_code == 200, res.json().get("message", "Operation completed.")
     except Exception as e:
         return False, str(e)
@@ -103,19 +198,26 @@ def sync_table_api(table_name):
 
 def query_rag_api(question):
     try:
+        session_id = st.session_state.get("session_id")
         res = requests.post(
             f"{API_BASE_URL}/api/v1/query",
-            json={"question": question},
-            timeout=180
+            headers=get_auth_headers(),
+            json={"question": question, "session_id": session_id},
+            timeout=180,
         )
         if res.status_code == 200:
             return res.json()
+        elif res.status_code == 401:
+            return {"status": "error", "answer": "Session expired or unauthorized. Please log in again.", "sources": []}
         return {"status": "error", "answer": f"Error: {res.text}", "sources": []}
     except Exception as e:
         return {"status": "error", "answer": f"API Connection Error: {e}", "sources": []}
 
 
 # --- SESSION STATE INITIALIZATION ---
+if "session_id" not in st.session_state:
+    st.session_state.session_id = uuid.uuid4().hex[:12]
+
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
@@ -126,180 +228,245 @@ if "messages" not in st.session_state:
     ]
 
 
-# --- SIDEBAR (CONTROL PANEL) ---
+# --- SIDEBAR (CONTROL & AUTH PANEL) ---
 with st.sidebar:
     st.title("⚙️ Control Panel")
 
-    # 1. System Status
-    stats = fetch_stats()
-    if stats:
-        st.success("🟢 API Connected")
-        st.markdown(f"**Device:** `{stats.get('device', 'Unknown')}`")
-        st.markdown(f"**Model:** `{stats.get('llm_model', '').split('/')[-1]}`")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Total Documents", stats.get("total_documents", 0))
-        with col2:
-            st.metric("Vector Chunks", stats.get("total_chunks", 0))
-    else:
-        st.error("🔴 API Offline (FastAPI server not reachable)")
-        st.info("Start backend in terminal: `uvicorn src.main:app --reload`")
-
-    st.divider()
-
-    # 2. Document Upload
-    st.subheader("📤 Upload Document")
-    uploaded_file = st.file_uploader(
-        "Choose a PDF, Word, or TXT file",
-        type=["pdf", "docx", "txt"],
-        help="Uploaded files are automatically parsed, contextualized, and indexed into ChromaDB."
-    )
-    if uploaded_file is not None:
-        if st.button("🚀 Upload and Index", use_container_width=True):
-            with st.spinner("Parsing and vectorizing document..."):
-                success, msg = upload_document(uploaded_file)
+    # 1. Authentication Section
+    if not st.session_state.auth_token:
+        st.subheader("🔐 Enterprise Login")
+        login_user = st.text_input("Username", key="login_username", placeholder="e.g., admin")
+        login_pass = st.text_input("Password", type="password", key="login_password")
+        if st.button("Log In", use_container_width=True, type="primary"):
+            if not login_user or not login_pass:
+                st.warning("Please enter username and password.")
+            else:
+                success, msg = login_api(login_user, login_pass)
                 if success:
                     st.success(msg)
                     st.rerun()
                 else:
-                    st.error(f"Upload failed: {msg}")
-
-    st.divider()
-
-    # 3. Indexed Documents List & Deletion
-    st.subheader("📚 Indexed Documents")
-    docs = fetch_documents()
-    if docs:
-        for doc in docs:
-            col_info, col_del = st.columns([4, 1])
-            with col_info:
-                st.markdown(f"**{doc['filename']}**  \n<small>{doc['size_kb']} KB | {doc['chunk_count']} chunks</small>", unsafe_allow_html=True)
-            with col_del:
-                if st.button("🗑️", key=f"del_{doc['filename']}", help=f"Delete '{doc['filename']}'"):
-                    success, msg = delete_document_api(doc['filename'])
-                    if success:
-                        st.toast(f"'{doc['filename']}' deleted!", icon="🗑️")
-                        st.rerun()
-                    else:
-                        st.error(msg)
-            st.write("---")
+                    st.error(msg)
+        st.caption("Default admin credentials: `admin` / `admin123`")
+        st.divider()
     else:
-        st.caption("No indexed documents found.")
+        user_info = st.session_state.user_info or {}
+        role = user_info.get("role", "viewer")
+        st.markdown(f"👤 Logged in as: **{user_info.get('username')}**")
+        badge_class = f"role-{role}"
+        st.markdown(f'<span class="role-badge {badge_class}">{role}</span>', unsafe_allow_html=True)
+        if st.button("Log Out", use_container_width=True):
+            logout()
+        st.divider()
 
-    st.divider()
+    # 2. System Status
+    if st.session_state.auth_token:
+        stats = fetch_stats()
+        if stats:
+            st.success("🟢 API Connected")
+            st.markdown(f"**Device:** `{stats.get('device', 'Unknown')}`")
+            st.markdown(f"**Model:** `{stats.get('llm_model', '').split('/')[-1]}`")
 
-    # 4. Database Management (SQLAlchemy Universal Connector)
-    st.subheader("🗄️ Database")
-    db_data = fetch_database_status()
-    if db_data and db_data.get("connection", {}).get("status") == "connected":
-        conn = db_data["connection"]
-        dialect = conn.get("dialect", "").upper()
-        tables = conn.get("tables", [])
-        st.success(f"🟢 **{dialect}** Connected")
-        st.caption(f"Accessible Tables: {len(tables)}")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Total Documents", stats.get("total_documents", 0))
+            with col2:
+                st.metric("Vector Chunks", stats.get("total_chunks", 0))
+        else:
+            st.error("🔴 API Offline or Session Expired")
+            st.info("Start backend: `uvicorn src.api.main:app --reload`")
 
-        if tables:
-            selected_table = st.selectbox("Select Table to Vectorize", tables)
-            if st.button("🔄 Vectorize Table", key="sync_table_btn", use_container_width=True):
-                with st.spinner(f"Vectorizing table '{selected_table}'..."):
-                    success, msg = sync_table_api(selected_table)
-                    if success:
-                        st.toast(msg, icon="✅")
-                        st.rerun()
-                    else:
-                        st.error(msg)
+        st.divider()
 
-            with st.expander("🔍 Inspect Database Schema"):
-                st.code(db_data.get("schema_summary", "Schema unavailable."), language="text")
-    elif db_data and db_data.get("connection", {}).get("status") == "not_configured":
-        st.caption("⚪ Database Not Configured")
-        st.info("Optional: Set DATABASE_URL in .env to connect PostgreSQL, MSSQL, MySQL, Oracle, or SQLite.")
-    else:
-        st.caption("⚪ Database Offline")
+        user_role = (st.session_state.user_info or {}).get("role", "viewer")
 
-    st.divider()
-    if st.button("🧹 Clear Conversation", use_container_width=True):
-        st.session_state.messages = [
-            {
-                "role": "assistant",
-                "content": "Conversation history cleared. Ready for new questions!",
-                "sources": []
-            }
-        ]
-        st.rerun()
+        # 3. Document Upload (Admin & Editor only)
+        if user_role in ["admin", "editor"]:
+            st.subheader("📤 Upload Document")
+            uploaded_file = st.file_uploader(
+                "Choose a PDF, Word, or TXT file",
+                type=["pdf", "docx", "txt"],
+                help="Uploaded files are automatically parsed, contextualized, and indexed into ChromaDB."
+            )
+            if uploaded_file is not None:
+                if st.button("🚀 Upload and Index", use_container_width=True):
+                    with st.spinner("Parsing and vectorizing document..."):
+                        success, msg = upload_document(uploaded_file)
+                        if success:
+                            st.success(msg)
+                            st.rerun()
+                        else:
+                            st.error(f"Upload failed: {msg}")
+
+            st.divider()
+
+        # 4. Indexed Documents List & Deletion
+        st.subheader("📚 Indexed Documents")
+        docs = fetch_documents()
+        if docs:
+            for doc in docs:
+                col_info, col_del = st.columns([4, 1])
+                with col_info:
+                    st.markdown(f"**{doc['filename']}**  \n<small>{doc['size_kb']} KB | {doc['chunk_count']} chunks</small>", unsafe_allow_html=True)
+                with col_del:
+                    if user_role in ["admin", "editor"]:
+                        if st.button("🗑️", key=f"del_{doc['filename']}", help=f"Delete '{doc['filename']}'"):
+                            success, msg = delete_document_api(doc['filename'])
+                            if success:
+                                st.toast(f"'{doc['filename']}' deleted!", icon="🗑️")
+                                st.rerun()
+                            else:
+                                st.error(msg)
+                st.write("---")
+        else:
+            st.caption("No indexed documents found.")
+
+        st.divider()
+
+        # 5. Database Management (Admin only)
+        if user_role == "admin":
+            st.subheader("🗄️ Database")
+            db_data = fetch_database_status()
+            if db_data and db_data.get("connection", {}).get("status") == "connected":
+                conn = db_data["connection"]
+                dialect = conn.get("dialect", "").upper()
+                tables = conn.get("tables", [])
+                st.success(f"🟢 **{dialect}** Connected")
+                st.caption(f"Accessible Tables: {len(tables)}")
+
+                if tables:
+                    selected_table = st.selectbox("Select Table to Vectorize", tables)
+                    if st.button("🔄 Vectorize Table", key="sync_table_btn", use_container_width=True):
+                        with st.spinner(f"Vectorizing table '{selected_table}'..."):
+                            success, msg = sync_table_api(selected_table)
+                            if success:
+                                st.toast(msg, icon="✅")
+                                st.rerun()
+                            else:
+                                st.error(msg)
+
+                    with st.expander("🔍 Inspect Database Schema"):
+                        st.code(db_data.get("schema_summary", "Schema unavailable."), language="text")
+            elif db_data and db_data.get("connection", {}).get("status") == "not_configured":
+                st.caption("⚪ Database Not Configured")
+                st.info("Optional: Set DATABASE_URL in .env to connect PostgreSQL, MSSQL, MySQL, Oracle, or SQLite.")
+            else:
+                st.caption("⚪ Database Offline")
+
+            st.divider()
+
+            # 6. Audit & Compliance Log Inspector (Admin only)
+            st.subheader("🛡️ Audit Trail")
+            with st.expander("📋 View Compliance Logs & Metrics"):
+                audit_stats = fetch_audit_stats()
+                if audit_stats:
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.metric("Total Events", audit_stats.get("total_records", 0))
+                        st.metric("Queries", audit_stats.get("queries_executed", 0))
+                    with c2:
+                        st.metric("Uploads", audit_stats.get("documents_uploaded", 0))
+                        st.metric("Logins", audit_stats.get("login_events", 0))
+
+                logs = fetch_audit_logs(limit=15)
+                if logs:
+                    st.write("**Latest Activity:**")
+                    for l in logs:
+                        badge = "🟢" if l.get("status") == "success" else "🔴"
+                        time_str = l.get("timestamp", "").split("T")[-1][:8]
+                        action_str = l.get("action", "").upper()
+                        user_str = l.get("username", "")
+                        detail_str = l.get("detail", "")
+                        st.markdown(f"{badge} `{time_str}` **{user_str}** [{action_str}]: *{detail_str[:60]}*")
+                else:
+                    st.caption("No audit events recorded yet.")
+
+            st.divider()
+
+        if st.button("🧹 Clear Conversation", use_container_width=True):
+            st.session_state.session_id = uuid.uuid4().hex[:12]
+            st.session_state.messages = [
+                {
+                    "role": "assistant",
+                    "content": "Conversation history cleared. Ready for new questions!",
+                    "sources": []
+                }
+            ]
+            st.rerun()
 
 
 # --- MAIN PANEL (CHAT) ---
 st.markdown('<div class="main-header">🏢 OpenLocalRagAgents Assistant</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Zero-leakage, on-premise generative AI assistant running 100% locally on your infrastructure.</div>', unsafe_allow_html=True)
 
+if not st.session_state.auth_token:
+    st.info("🔒 **Authentication Required:** Please log in using the Control Panel in the sidebar to access the Enterprise Assistant.")
+else:
+    # Render Message History
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
 
-# Render Message History
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+            # Audit & Verification Badges
+            if msg.get("is_refined") is True:
+                st.caption("✍️ *LangGraph Audit: Response re-evaluated and refined according to company documents.*")
+            elif msg.get("verified") is True and msg.get("sources"):
+                st.caption("🛡️ *LangGraph Audit: Verified directly against company documents.*")
+            elif msg.get("verified") is False and msg.get("sources"):
+                st.caption("⚠️ *LangGraph Audit: Could not be fully verified against company documents.*")
 
-        # Audit & Verification Badges
-        if msg.get("is_refined") is True:
-            st.caption("✍️ *LangGraph Audit: Response re-evaluated and refined according to company documents.*")
-        elif msg.get("verified") is True and msg.get("sources"):
-            st.caption("🛡️ *LangGraph Audit: Verified directly against company documents.*")
-        elif msg.get("verified") is False and msg.get("sources"):
-            st.caption("⚠️ *LangGraph Audit: Could not be fully verified against company documents.*")
+            # Render Referenced Sources
+            if msg.get("sources"):
+                with st.expander(f"📚 Referenced Sources ({len(msg['sources'])} Chunks)"):
+                    for idx, src in enumerate(msg["sources"], 1):
+                        distance_info = f" (Distance: {src['distance']})" if src.get("distance") is not None else ""
+                        st.markdown(f"**{idx}. 📄 `{src['source']}` — Chunk #{src['chunk_index']}{distance_info}**")
+                        st.markdown(f"> *\"{src['content'].strip()}\"*")
+                        st.write("")
 
-        # Render Referenced Sources
-        if msg.get("sources"):
-            with st.expander(f"📚 Referenced Sources ({len(msg['sources'])} Chunks)"):
-                for idx, src in enumerate(msg["sources"], 1):
-                    distance_info = f" (Distance: {src['distance']})" if src.get("distance") is not None else ""
-                    st.markdown(f"**{idx}. 📄 `{src['source']}` — Chunk #{src['chunk_index']}{distance_info}**")
-                    st.markdown(f"> *\"{src['content'].strip()}\"*")
-                    st.write("")
+    # User Input
+    if prompt := st.chat_input("Ask a question about your enterprise documents (e.g., 'What is our annual leave policy?')..."):
+        # Append user message
+        st.session_state.messages.append({"role": "user", "content": prompt, "sources": []})
+        with st.chat_message("user"):
+            st.markdown(prompt)
 
-# User Input
-if prompt := st.chat_input("Ask a question about your enterprise documents (e.g., 'What is our annual leave policy?')..."):
-    # Append user message
-    st.session_state.messages.append({"role": "user", "content": prompt, "sources": []})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+        # Query Backend with Thinking Spinner
+        with st.chat_message("assistant"):
+            with st.spinner("💭 Thinking and reviewing enterprise documents..."):
+                res = query_rag_api(prompt)
 
-    # Query Backend with Thinking Spinner
-    with st.chat_message("assistant"):
-        with st.spinner("💭 Thinking and reviewing enterprise documents..."):
-            res = query_rag_api(prompt)
+            answer = res.get("answer", "No response received.")
+            sources = res.get("sources", [])
+            is_refined = res.get("is_refined", False)
+            grade = str(res.get("hallucination_grade", "")).strip().lower()
+            is_verified = ("evet" in grade or "yes" in grade) or is_refined
 
-        answer = res.get("answer", "No response received.")
-        sources = res.get("sources", [])
-        is_refined = res.get("is_refined", False)
-        grade = str(res.get("hallucination_grade", "")).strip().lower()
-        is_verified = ("evet" in grade or "yes" in grade) or is_refined
+            # Render complete answer
+            st.markdown(answer)
 
-        # Render complete answer
-        st.markdown(answer)
+            # Audit Badges
+            if is_refined:
+                st.caption("✍️ *LangGraph Audit: Response re-evaluated and refined according to company documents.*")
+            elif is_verified and sources:
+                st.caption("🛡️ *LangGraph Audit: Verified directly against company documents.*")
+            elif not is_verified and sources:
+                st.caption("⚠️ *LangGraph Audit: Could not be fully verified against company documents.*")
 
-        # Audit Badges
-        if is_refined:
-            st.caption("✍️ *LangGraph Audit: Response re-evaluated and refined according to company documents.*")
-        elif is_verified and sources:
-            st.caption("🛡️ *LangGraph Audit: Verified directly against company documents.*")
-        elif not is_verified and sources:
-            st.caption("⚠️ *LangGraph Audit: Could not be fully verified against company documents.*")
+            # Referenced Sources
+            if sources:
+                with st.expander(f"📚 Referenced Sources ({len(sources)} Chunks)"):
+                    for idx, src in enumerate(sources, 1):
+                        distance_info = f" (Distance: {src['distance']})" if src.get("distance") is not None else ""
+                        st.markdown(f"**{idx}. 📄 `{src['source']}` — Chunk #{src['chunk_index']}{distance_info}**")
+                        st.markdown(f"> *\"{src['content'].strip()}\"*")
+                        st.write("")
 
-        # Referenced Sources
-        if sources:
-            with st.expander(f"📚 Referenced Sources ({len(sources)} Chunks)"):
-                for idx, src in enumerate(sources, 1):
-                    distance_info = f" (Distance: {src['distance']})" if src.get("distance") is not None else ""
-                    st.markdown(f"**{idx}. 📄 `{src['source']}` — Chunk #{src['chunk_index']}{distance_info}**")
-                    st.markdown(f"> *\"{src['content'].strip()}\"*")
-                    st.write("")
-
-        # Save to session history
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": answer,
-            "sources": sources,
-            "verified": is_verified,
-            "is_refined": is_refined
-        })
+            # Save to session history
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": answer,
+                "sources": sources,
+                "verified": is_verified,
+                "is_refined": is_refined
+            })

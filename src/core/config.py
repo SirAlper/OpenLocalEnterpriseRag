@@ -21,12 +21,30 @@ ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".docx", ".txt"}
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 LOG_FILE = os.getenv("LOG_FILE", os.path.join(BASE_DIR, "app.log"))
 
-LOCAL_LLM_PATH = os.path.join(MODELS_DIR, "qwen2.5-1.5b")
+# ──────────────────────────── AUTHENTICATION CONFIGURATION ────────────────────────────
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
+JWT_ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+ADMIN_DEFAULT_USERNAME = os.getenv("ADMIN_DEFAULT_USERNAME", "admin")
+ADMIN_DEFAULT_PASSWORD = os.getenv("ADMIN_DEFAULT_PASSWORD", "admin123")
+USERS_FILE_PATH = os.getenv("USERS_FILE_PATH", os.path.join(DOCS_PATH, "users.json"))
+JWT_SECRET_FILE_PATH = os.path.join(DOCS_PATH, ".jwt_secret")
+
+# ──────────────────────────── LLM & SERVING CONFIGURATION ────────────────────────────
+# Backend: "huggingface" (in-process) or "ollama" (external high-concurrency server)
+LLM_BACKEND = os.getenv("LLM_BACKEND", "huggingface").lower()
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+OLLAMA_NUM_PARALLEL = int(os.getenv("OLLAMA_NUM_PARALLEL", "4"))
+
+LLM_MODEL_ID = os.getenv("LLM_MODEL_ID", "Qwen/Qwen2.5-1.5B-Instruct")
+LLM_MODEL_DIR = os.getenv("LLM_MODEL_DIR", "qwen2.5-1.5b")
+LOCAL_LLM_PATH = os.path.join(MODELS_DIR, LLM_MODEL_DIR)
 LOCAL_EMBEDDING_PATH = os.path.join(MODELS_DIR, "bge-m3")
 LOCAL_RERANKER_PATH = os.path.join(MODELS_DIR, "bge-reranker-v2-m3")
 
 # Load from local folder if exists, otherwise fallback to HuggingFace Hub model ID
-LLM_MODEL_NAME = LOCAL_LLM_PATH if os.path.exists(LOCAL_LLM_PATH) else "Qwen/Qwen2.5-1.5B-Instruct"
+LLM_MODEL_NAME = LOCAL_LLM_PATH if os.path.exists(LOCAL_LLM_PATH) else LLM_MODEL_ID
 EMBEDDING_MODEL_NAME = LOCAL_EMBEDDING_PATH if os.path.exists(LOCAL_EMBEDDING_PATH) else "BAAI/bge-m3"
 RERANKER_MODEL_NAME = LOCAL_RERANKER_PATH if os.path.exists(LOCAL_RERANKER_PATH) else "BAAI/bge-reranker-v2-m3"
 

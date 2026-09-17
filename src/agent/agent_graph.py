@@ -1,9 +1,13 @@
-from typing import TypedDict, List, Dict, Any
+import os
+from typing import TypedDict, List, Dict, Any, Optional
 from langgraph.graph import StateGraph, END
 from src.agent.llm import create_chat_model
 from src.rag.rag_engine import RAGEngine
 from src.agent.nodes import AgentNodes
 from src.agent.query_service import QueryService
+from src.core.logger import get_logger
+
+logger = get_logger("AgentGraph")
 
 
 class AgentState(TypedDict):
@@ -14,20 +18,41 @@ class AgentState(TypedDict):
     hallucination_grade: str
     retry_count: int
     is_refined: bool
+    chat_history: List[Dict[str, str]]
 
 
 class EnterpriseRAGAgent:
     """Orchestrator class that sets up the LangGraph workflow and initializes the query service."""
 
-    def __init__(self, rag_engine: RAGEngine):
+    def __init__(self, rag_engine: RAGEngine, checkpointer=None):
         self.rag_engine = rag_engine
         self.chat_model = create_chat_model()
         self.nodes = AgentNodes(self.chat_model, self.rag_engine)
+        self.checkpointer = checkpointer or self._init_default_checkpointer()
         self.app = self._build_graph()
         self.service = QueryService(self.app, self.nodes, self.chat_model)
 
+    def _init_default_checkpointer(self):
+        """Initialize SQLite checkpointer for conversation memory persistence."""
+        try:
+            import sqlite3
+            from langgraph.checkpoint.sqlite import SqliteSaver
+            from src.core.config import DOCS_PATH
+
+            os.makedirs(DOCS_PATH, exist_ok=True)
+            db_path = os.path.join(DOCS_PATH, "conversations.db")
+            conn = sqlite3.connect(db_path, check_same_thread=False)
+            saver = SqliteSaver(conn)
+            saver.setup()
+            logger.info(f"Initialized conversation checkpointer at {db_path}")
+            return saver
+        except Exception as e:
+            logger.warning(f"Could not initialize SqliteSaver, falling back to MemorySaver: {e}")
+            from langgraph.checkpoint.memory import MemorySaver
+            return MemorySaver()
+
     def _build_graph(self):
-        """Configure and compile the LangGraph state workflow."""
+        """Configure and compile the LangGraph state workflow with checkpointer."""
         workflow = StateGraph(AgentState)
 
         workflow.add_node("retrieve", self.nodes.retrieve)
@@ -47,18 +72,20 @@ class EnterpriseRAGAgent:
         workflow.add_edge("refine", "grade")
         workflow.add_edge("fallback", END)
 
+        if self.checkpointer:
+            return workflow.compile(checkpointer=self.checkpointer)
         return workflow.compile()
 
     # ──────────────────────────── QUERY SERVICE BRIDGES ────────────────────────────
 
-    def query(self, question: str) -> dict:
+    def query(self, question: str, thread_id: Optional[str] = None) -> dict:
         """Run batch query through the LangGraph workflow."""
-        return self.service.query(question)
+        return self.service.query(question, thread_id=thread_id)
 
-    def stream_events(self, question: str):
+    def stream_events(self, question: str, thread_id: Optional[str] = None):
         """Stream stage status events and final answer."""
-        return self.service.stream_events(question)
+        return self.service.stream_events(question, thread_id=thread_id)
 
-    def stream_query(self, question: str):
+    def stream_query(self, question: str, thread_id: Optional[str] = None):
         """Stream final answer upon completion."""
-        return self.service.stream_query(question)
+        return self.service.stream_query(question, thread_id=thread_id)

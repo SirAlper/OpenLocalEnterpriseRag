@@ -2,23 +2,44 @@ import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, pipeline
 from langchain_huggingface import ChatHuggingFace, HuggingFacePipeline
-from src.core.config import LLM_MODEL_NAME, USE_4BIT_QUANTIZATION
+from src.core.config import (
+    LLM_BACKEND,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL,
+    LLM_MODEL_NAME,
+    USE_4BIT_QUANTIZATION,
+)
 from src.core.logger import get_logger
 
 logger = get_logger("LLM")
 
 
-def create_chat_model() -> ChatHuggingFace:
-    """Load local Qwen model and wrap it into a LangChain ChatHuggingFace instance.
+def create_chat_model():
+    """Load chat model based on configured LLM_BACKEND ('ollama' or 'huggingface').
 
     The returned object implements standard LangChain ChatModel interfaces:
         - chat_model.invoke(messages)  -> Batch response
         - chat_model.stream(messages)  -> Token stream
         - chat_model.bind_tools(tools) -> Tool binding
     """
+    if LLM_BACKEND == "ollama":
+        from langchain_ollama import ChatOllama
+
+        logger.info(
+            f"Connecting to Ollama server at {OLLAMA_BASE_URL} with model '{OLLAMA_MODEL}'..."
+        )
+        chat_model = ChatOllama(
+            base_url=OLLAMA_BASE_URL,
+            model=OLLAMA_MODEL,
+            temperature=0.0,
+            num_predict=512,
+        )
+        logger.info("[LangChain] ChatOllama initialized successfully.")
+        return chat_model
+
     is_cuda = torch.cuda.is_available()
     device_str = "CUDA GPU" if is_cuda else "CPU"
-    logger.info(f"Loading local LLM ({LLM_MODEL_NAME}) on {device_str}...")
+    logger.info(f"Loading local HuggingFace LLM ({LLM_MODEL_NAME}) on {device_str}...")
 
     is_local = os.path.exists(LLM_MODEL_NAME)
     tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_NAME, local_files_only=is_local)

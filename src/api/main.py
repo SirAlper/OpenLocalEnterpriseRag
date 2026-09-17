@@ -14,7 +14,13 @@ from src.api.state import (
     auto_index_on_startup,
     query_lock,
 )
-from src.api.routes import documents_router, query_router, database_router
+from src.api.routes import (
+    documents_router,
+    query_router,
+    database_router,
+    auth_router,
+    admin_router,
+)
 
 logger = get_logger("API")
 
@@ -44,6 +50,8 @@ app.add_middleware(
 )
 
 # Include modular API routers
+app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(documents_router)
 app.include_router(query_router)
 app.include_router(database_router)

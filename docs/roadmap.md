@@ -19,8 +19,9 @@ The strategic development roadmap for `OpenLocalRagAgents` is structured below t
 
 ## 🤖 2. Next-Gen Agentic RAG
 
-- [ ] **Multi-Turn Conversational Memory (LangGraph Checkpointer):**
-  - Integrate LangGraph Memory / SqliteSaver to persist conversation history and resolve references across multi-turn sessions.
+- [x] **Multi-Turn Conversational Memory (LangGraph Checkpointer):**
+  - Integrated LangGraph SQLite checkpointer (`conversations.db`) and session-based thread tracking (`thread_id`).
+  - Contextual retrieval query enrichment and conversational history retention across turns.
 - [ ] **Dynamic Query Rewriting & Expansion:**
   - Autonomous agent node to rewrite ambiguous user prompts into optimized search representations before querying the vector store.
 - [x] **Closed-Loop Self-Correction & Refinement:**
@@ -39,9 +40,10 @@ The strategic development roadmap for `OpenLocalRagAgents` is structured below t
 ## ⚡ 3. Serving Optimization & Inference Acceleration
 
 - [x] **Request Serialization & Concurrency Protection:**
-  - Integrated `asyncio.Lock` to serialize LLM queries, avoiding GPU VRAM thrashing and pipeline race conditions under concurrent access.
-- [ ] **Optimized Inference Engine Integration (vLLM / llama.cpp):**
-  - Continuous batching and PagedAttention to maximize throughput and concurrency on GPU clusters.
+  - Integrated `QueryConcurrencyManager` with dual-mode support: serialized `asyncio.Lock` for in-process HuggingFace, and parallel `asyncio.Semaphore` for Ollama serving.
+- [x] **Optimized Inference Engine Integration (Ollama / vLLM):**
+  - First-class Ollama support with `langchain-ollama` (`LLM_BACKEND=ollama`), enabling 7B/14B models (`qwen2.5:7b`, `llama3.1:8b`) and multi-request parallel processing.
+  - Optional `ollama` container definition in `docker-compose.yml`.
 - [ ] **Semantic Vector Caching:**
   - Cache recurring queries using vector similarity (Redis / GPTCache) to answer repeated enterprise questions with near-zero latency.
 - [ ] **Speculative Decoding:**
@@ -51,15 +53,19 @@ The strategic development roadmap for `OpenLocalRagAgents` is structured below t
 
 ## 🏢 4. Enterprise Security, Governance & DevOps
 
-- [x] **Automated Testing Suite (30 Tests):**
-  - Unit and integration tests covering LangGraph decision branches, read-only SQL guards, file upload security, and contextual document loader.
+- [x] **Automated Testing Suite (49 Tests):**
+  - Comprehensive unit and integration tests covering LangGraph decision branches, read-only SQL guards, file upload security, authentication/RBAC, multi-turn memory, Ollama serving, and audit trail logging.
 
 - [x] **Defense-in-Depth API Security:**
   - Path traversal protection, file extension whitelisting, upload size limits, and configurable CORS origins.
 - [x] **Centralized Logging & Lifespan Architecture:**
   - Standardized logger with console and rotating file handlers (`src.core.logger`), `.env` support, and FastAPI lifespan model loading.
-- [ ] **Role-Based Access Control (RBAC):**
-  - Enforce user and departmental permissions (HR, Legal, Finance, Engineering) at the ChromaDB collection and document levels.
+- [x] **Role-Based Access Control (RBAC) & JWT Authentication:**
+  - Native JWT Bearer token generation, bcrypt password hashing, and user role enforcement (`admin`, `editor`, `viewer`).
+  - Permission-gated endpoints for document management, database queries, and user administration.
+- [x] **Enterprise Audit Trail & Compliance Logging:**
+  - Structured SQLite audit database (`data/audit.db`) recording all queries, file uploads/deletions, logins, and anomalies with execution duration and client IP.
+  - Admin compliance inspection dashboard and statistics in both REST API and Streamlit UI.
 - [ ] **Observability & Tracing:**
   - OpenTelemetry, Langfuse, or Arize Phoenix integration to trace latency, token consumption, and retrieval fidelity.
 - [x] **One-Command Containerization (Docker & NVIDIA Container Toolkit):**

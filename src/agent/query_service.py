@@ -1,5 +1,5 @@
-from typing import Generator
-from langchain_huggingface import ChatHuggingFace
+from typing import Generator, Optional
+from langchain_core.language_models.chat_models import BaseChatModel
 from src.agent.nodes import AgentNodes
 from src.agent.prompts import build_rag_messages, NO_CONTEXT_RESPONSE
 
@@ -7,31 +7,46 @@ from src.agent.prompts import build_rag_messages, NO_CONTEXT_RESPONSE
 class QueryService:
     """Service managing batch queries and event-based execution flows for the RAG Agent."""
 
-    def __init__(self, app, nodes: AgentNodes, chat_model: ChatHuggingFace):
+    def __init__(self, app, nodes: AgentNodes, chat_model: BaseChatModel):
         self.app = app
         self.nodes = nodes
         self.chat_model = chat_model
 
-    def query(self, question: str) -> dict:
+    def query(self, question: str, thread_id: Optional[str] = None) -> dict:
         """Run the LangGraph workflow and return the verified answer, sources, and audit status."""
-        result = self.app.invoke({
+        config = {"configurable": {"thread_id": thread_id}} if thread_id else {}
+        initial_input = {
             "question": question,
             "context": "",
             "sources": [],
             "answer": "",
             "hallucination_grade": "",
             "retry_count": 0,
-            "is_refined": False
-        })
+            "is_refined": False,
+        }
+        if not thread_id:
+            initial_input["chat_history"] = []
+
+        result = self.app.invoke(initial_input, config=config)
         return {
             "answer": result.get("answer", ""),
             "sources": result.get("sources", []),
             "hallucination_grade": result.get("hallucination_grade", ""),
-            "is_refined": result.get("is_refined", False)
+            "is_refined": result.get("is_refined", False),
+            "chat_history": result.get("chat_history", [])
         }
 
-    def stream_events(self, question: str) -> Generator[dict, None, None]:
+    def stream_events(self, question: str, thread_id: Optional[str] = None) -> Generator[dict, None, None]:
         """Yield workflow stage events and deliver the final answer upon completion."""
+        prior_history = []
+        if thread_id and hasattr(self.app, "get_state"):
+            try:
+                graph_state = self.app.get_state({"configurable": {"thread_id": thread_id}})
+                if graph_state and graph_state.values:
+                    prior_history = list(graph_state.values.get("chat_history", []))
+            except Exception:
+                pass
+
         state = {
             "question": question,
             "context": "",
@@ -39,7 +54,8 @@ class QueryService:
             "answer": "",
             "hallucination_grade": "",
             "retry_count": 0,
-            "is_refined": False
+            "is_refined": False,
+            "chat_history": prior_history
         }
 
         # 1. RETRIEVE
@@ -58,6 +74,7 @@ class QueryService:
         yield {"type": "status", "message": "✍️ Preparing response...", "node": "generate"}
         generate_out = self.nodes.generate(state)
         state["answer"] = generate_out["answer"]
+        state["chat_history"] = generate_out.get("chat_history", state["chat_history"])
 
         # 3. GRADE & REFINE LOOP
         while True:
@@ -108,8 +125,8 @@ class QueryService:
             "is_refined": state.get("is_refined", False)
         }
 
-    def stream_query(self, question: str) -> Generator[str, None, None]:
+    def stream_query(self, question: str, thread_id: Optional[str] = None) -> Generator[str, None, None]:
         """Yield final answer upon workflow completion."""
-        for event in self.stream_events(question):
+        for event in self.stream_events(question, thread_id=thread_id):
             if event["type"] == "done":
                 yield event["answer"]
