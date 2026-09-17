@@ -61,7 +61,7 @@ The strategic development roadmap for `OpenLocalEnterpriseRag` is structured bel
   - Enforce user and departmental permissions (HR, Legal, Finance, Engineering) at the ChromaDB collection and document levels.
 - [ ] **Observability & Tracing:**
   - OpenTelemetry, Langfuse, or Arize Phoenix integration to trace latency, token consumption, and retrieval fidelity.
-- [ ] **One-Command Containerization (Docker & NVIDIA Container Toolkit):**
+- [x] **One-Command Containerization (Docker & NVIDIA Container Toolkit):**
   - Production-ready Dockerfile and docker-compose configurations with GPU passthrough for automated server provisioning.
 - [ ] **Enterprise SSO & Directory Integration:**
   - SAML 2.0 / OAuth2 integration with Active Directory, Okta, and Keycloak for enterprise-grade authentication.

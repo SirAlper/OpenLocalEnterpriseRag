@@ -1,0 +1,62 @@
+services:
+  # ───────────────────────────────────────────────────────────────────────────
+  # Backend: FastAPI REST API + LangGraph Self-RAG + ChromaDB + ML Models
+  # ───────────────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: enterprise_rag_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - CORS_ORIGINS=http://localhost:8501,http://127.0.0.1:8501,http://frontend:8501
+      - RAG_DEVICE=cpu
+      - MAX_UPLOAD_SIZE_MB=50
+      - LOG_LEVEL=INFO
+      - ALLOW_ONLINE_HF=0
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+      - ./vector_db:/app/vector_db
+    # Uncomment the deploy block below to enable NVIDIA GPU acceleration:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/stats || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - rag_network
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Frontend: Streamlit Web UI Management Dashboard & Assistant Chat
+  # ───────────────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: enterprise_rag_frontend
+    restart: unless-stopped
+    command: ["streamlit", "run", "ui/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    ports:
+      - "8501:8501"
+    environment:
+      - API_BASE_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - rag_network
+
+networks:
+  rag_network:
+    driver: bridge

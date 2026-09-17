@@ -34,6 +34,7 @@ Explore our detailed architectural and operational guides:
 | 📦 [**Installation & Hardware Matrix**](docs/installation.md) | VRAM/RAM hardware requirements, CUDA 12.1 setup, and offline model provisioning |
 | 🗄️ [**Database Connectors**](docs/database_connectors.md) | Universal SQLAlchemy configurations, Text-to-SQL security, and ETL table vectorization |
 | 🔌 [**REST API Reference**](docs/api_reference.md) | FastAPI endpoint documentation, NDJSON event streaming protocols, and cURL examples |
+| 🐳 [**Docker Deployment**](docs/docker_deployment.md) | Production multi-service containerization, NVIDIA GPU passthrough, and volumes |
 | 🗺️ [**Roadmap**](docs/roadmap.md) | Hybrid search (BM25 + Dense), GraphRAG, multi-turn memory, and vLLM acceleration |
 
 ---
@@ -73,7 +74,18 @@ streamlit run ui/app.py
 # Web Dashboard: http://localhost:8501
 ```
 
-### 4. Run Automated Tests
+### 4. Or Launch Instantly with Docker 🐳
+Run the backend and UI with persistent local volumes:
+```bash
+# CPU Mode:
+docker compose up -d
+
+# NVIDIA GPU Mode (CUDA Passthrough):
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+```
+See the full [Docker Deployment Guide](docs/docker_deployment.md) for Container Toolkit setup.
+
+### 5. Run Automated Tests
 Verify all 32 unit and security tests across agent, database, loader, and API guards:
 ```bash
 python -m unittest discover tests -v
@@ -101,6 +113,9 @@ OpenLocalEnterpriseRag/
 │   ├── api/               # Modular FastAPI REST API gateway (routes/, schemas, state)
 │   └── main.py            # Backward-compatible launch entrypoint (uvicorn src.main:app)
 ├── docs/                  # [Comprehensive Technical Guides](docs/)
+├── Dockerfile             # Production multi-stage Docker container specification
+├── docker-compose.yml     # Multi-service compose definition (Backend + Frontend)
+├── docker-compose.gpu.yml # NVIDIA GPU passthrough override
 ├── download_model.py      # Script to download HuggingFace model weights to local storage
 ├── requirements.txt       # Python package dependencies
 └── LICENSE                # MIT License

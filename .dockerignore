@@ -1,0 +1,33 @@
+# Version control
+.git
+.gitignore
+
+# Virtual environments
+.venv
+venv
+env
+ENV
+
+# Python cache & compiled files
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache
+
+# Heavy data & persistent volumes (mounted dynamically)
+models/
+vector_db/
+data/
+!data/.gitkeep
+
+# Logs
+*.log
+logs/
+app.log
+
+# IDE & OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
