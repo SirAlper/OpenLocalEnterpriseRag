@@ -1,6 +1,6 @@
 # 🗺️ Project Roadmap
 
-The strategic development roadmap for `OpenLocalEnterpriseRag` is structured below to expand its capabilities as a world-class on-premise enterprise AI infrastructure.
+The strategic development roadmap for `OpenLocalRagAgents` is structured below to expand its capabilities as a world-class on-premise enterprise AI infrastructure.
 
 ---
 

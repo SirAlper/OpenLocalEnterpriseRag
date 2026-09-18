@@ -1,6 +1,6 @@
 # 🏗️ System Architecture & Engineering Principles
 
-`OpenLocalEnterpriseRag` is built upon **Two-Stage Retrieval**, **Stateful Agentic AI (LangGraph)**, **Role-Based Access Control (RBAC)**, and **Tamper-Evident Audit Logging** workflows designed to execute 100% locally on private enterprise hardware without sending proprietary data to third-party cloud APIs.
+`OpenLocalRagAgents` is built upon **Two-Stage Retrieval**, **Stateful Agentic AI (LangGraph)**, **Role-Based Access Control (RBAC)**, and **Tamper-Evident Audit Logging** workflows designed to execute 100% locally on private enterprise hardware without sending proprietary data to third-party cloud APIs.
 
 ---
 
