@@ -1,38 +1,37 @@
 # 🐳 Docker Deployment Guide
 
-This guide details how to deploy `OpenLocalRagAgents` using **Docker** and **Docker Compose** for production and on-premise enterprise environments.
+This guide details how to deploy `OpenLocalEnterpriseRag` using **Docker** and **Docker Compose** for production and on-premise enterprise environments.
 
 ---
 
 ## 🏗️ Architecture Overview
 
-The containerized deployment splits the platform into two decoupled services communicating over an internal Docker bridge network:
+The containerized deployment supports up to three decoupled services communicating over an internal Docker bridge network:
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│                       Host Machine                          │
-│                                                             │
-│   ┌──────────────────┐               ┌──────────────────┐   │
-│   │  ./models/       │               │  ./vector_db/    │   │
-│   │  (Weights ~6GB)  │               │  (ChromaDB)      │   │
-│   └────────┬─────────┘               └────────┬─────────┘   │
-│            │ (Volume)                         │ (Volume)    │
-│            ▼                                  ▼             │
-│   ┌─────────────────────────────────────────────────────┐   │
-│   │             rag_agents_backend (Port 8000)          │   │
-│   │       FastAPI + LangGraph + PyTorch (GPU/CPU)       │   │
-│   └──────────────────────────▲──────────────────────────┘   │
-│                              │ (Internal Network: http)     │
-│   ┌──────────────────────────┴──────────────────────────┐   │
-│   │            rag_agents_frontend (Port 8501)          │   │
-│   │           Streamlit Web Management UI               │   │
-│   └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                Host Machine                                 │
+│                                                                             │
+│   ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────────┐  │
+│   │  ./models/       │    │  ./data/         │    │  ./vector_db/        │  │
+│   │  (Weights ~6GB)  │    │  (DBs, Audits)   │    │  (ChromaDB vectors)  │  │
+│   └────────┬─────────┘    └────────┬─────────┘    └────────┬─────────────┘  │
+│            │ (Volume)              │ (Volume)              │ (Volume)       │
+│            ▼                       ▼                       ▼                │
+│   ┌──────────────────────────────────────────────────────────────────────┐  │
+│   │                  rag_agents_backend (Port 8000)                      │  │
+│   │            FastAPI + LangGraph + PyTorch (GPU/CPU)                   │  │
+│   └──────────────────────▲────────────────────────▲──────────────────────┘  │
+│                          │ (Internal: 8000)       │ (Internal: 11434)       │
+│   ┌──────────────────────┴───────────────┐ ┌──────┴──────────────────────┐  │
+│   │       rag_agents_frontend            │ │     rag_agents_ollama       │  │
+│   │      (Streamlit - Port 8501)         │ │   (Optional Profile: ollama)│  │
+│   └──────────────────────────────────────┘ └─────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-
-* **Zero-Bloat Image:** Model weights (`models/`), vector indexes (`vector_db/`), and enterprise documents (`data/`) are mounted dynamically as external volumes. The Docker image remains compact (~1.5 GB).
-* **Data Persistence:** Rebuilding or updating containers never deletes your documents or vectorized data.
+* **Zero-Bloat Image:** Model weights (`models/`), vector indexes (`vector_db/`), and enterprise documents/databases (`data/`) are mounted dynamically as external host volumes.
+* **Data Persistence:** Rebuilding or updating containers never deletes your documents, audit logs (`audit.db`), user accounts (`users.json`), conversation checkpoints (`conversations.db`), or vector collections.
 
 ---
 
@@ -50,11 +49,11 @@ The containerized deployment splits the platform into two decoupled services com
 ## ⚡ Quickstart in 3 Steps
 
 ### Step 1: Provision Local Models
-Before starting the containers, download the required local models to `./models`:
+Before starting the containers in HuggingFace mode, download the local models to `./models`:
 ```bash
 python download_model.py
 ```
-*(If you do not have Python installed on the host, you can also download them inside a temporary container or copy existing weights into `./models`).*
+*(If using the external Ollama serving profile exclusively, HuggingFace model weights are optional).*
 
 ### Step 2: Launch the Services
 
@@ -63,16 +62,59 @@ python download_model.py
 docker compose up -d --build
 ```
 
-#### Option B: NVIDIA GPU Acceleration (CUDA)
-To pass host NVIDIA GPUs directly to the backend container:
+#### Option B: NVIDIA GPU Acceleration (CUDA Passthrough)
+Pass host NVIDIA GPUs directly to the backend container:
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+```
+
+#### Option C: With Ollama High-Concurrency Serving Profile
+To spin up the bundled Ollama server alongside the backend and frontend:
+```bash
+docker compose --profile ollama up -d --build
 ```
 
 ### Step 3: Access Applications
 * **Streamlit Web UI:** `http://localhost:8501`
 * **FastAPI Swagger API:** `http://localhost:8000/docs`
 * **Healthcheck API:** `http://localhost:8000/api/v1/stats`
+
+> [!NOTE]
+> **Default Admin Credentials:**  
+> - **Username:** `admin`  
+> - **Password:** `admin123`
+
+---
+
+## ⚙️ Custom Configuration (`.env`)
+
+Place a `.env` file in the project root alongside `docker-compose.yml` to customize settings:
+
+```env
+# ─── LLM Serving Backend ───
+# Options: "huggingface" (local in-process) or "ollama" (external server)
+LLM_BACKEND=huggingface
+OLLAMA_BASE_URL=http://ollama:11434
+OLLAMA_MODEL=qwen2.5:7b
+OLLAMA_NUM_PARALLEL=4
+
+# ─── Authentication & RBAC ───
+ADMIN_DEFAULT_USERNAME=admin
+ADMIN_DEFAULT_PASSWORD=admin123
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+# Optional custom HMAC secret (randomly generated and saved to data/.jwt_secret if empty):
+# JWT_SECRET_KEY=your_custom_secret_key
+
+# ─── Relational Database (Optional) ───
+DATABASE_URL=sqlite:///./data/sample_enterprise.db
+DB_ALLOWED_TABLES=urunler,satislar,destek_talepleri
+DB_MAX_ROWS=50
+
+# ─── API & Security ───
+CORS_ORIGINS=http://localhost:8501,http://127.0.0.1:8501,http://frontend:8501
+MAX_UPLOAD_SIZE_MB=50
+LOG_LEVEL=INFO
+```
 
 ---
 
@@ -88,6 +130,9 @@ docker compose logs -f backend
 
 # Frontend UI only
 docker compose logs -f frontend
+
+# Ollama service only (if profile active)
+docker compose logs -f ollama
 ```
 
 ### Inspect Container Health:
@@ -100,28 +145,10 @@ docker compose ps
 docker compose down
 ```
 
-### Stop and Remove Volumes (Caution: Clears in-container state):
+### Stop and Remove Volumes (Caution: Clears Ollama cache):
 ```bash
 docker compose down -v
 ```
-
----
-
-## ⚙️ Custom Configuration (`.env`)
-
-You can pass an environment file to customize behavior:
-
-```env
-# Optional External Relational Database
-DATABASE_URL=postgresql+psycopg2://user:pass@host:5432/enterprise_db
-DB_ALLOWED_TABLES=urunler,satislar,destek_talepleri
-
-# API Limits
-MAX_UPLOAD_SIZE_MB=50
-LOG_LEVEL=INFO
-```
-
-Apply environment variables automatically by placing a `.env` file in the project root alongside `docker-compose.yml`.
 
 ---
 
@@ -137,5 +164,6 @@ docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
 If port `8000` or `8501` is already in use on your host machine, update the port mapping in `docker-compose.yml`:
 ```yaml
 ports:
-  - "8080:8000"  # Changes host port to 8080
+  - "8080:8000"  # Changes host backend port to 8080
 ```
+

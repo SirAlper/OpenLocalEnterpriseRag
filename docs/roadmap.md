@@ -1,6 +1,6 @@
 # 🗺️ Project Roadmap
 
-The strategic development roadmap for `OpenLocalRagAgents` is structured below to expand its capabilities as a world-class on-premise enterprise AI infrastructure.
+The strategic development roadmap for `OpenLocalEnterpriseRag` is structured below to expand its capabilities as a world-class on-premise enterprise AI infrastructure.
 
 ---
 
@@ -53,9 +53,8 @@ The strategic development roadmap for `OpenLocalRagAgents` is structured below t
 
 ## 🏢 4. Enterprise Security, Governance & DevOps
 
-- [x] **Automated Testing Suite (49 Tests):**
-  - Comprehensive unit and integration tests covering LangGraph decision branches, read-only SQL guards, file upload security, authentication/RBAC, multi-turn memory, Ollama serving, and audit trail logging.
-
+- [x] **Automated Testing Suite (52 Tests):**
+  - Comprehensive unit and integration tests covering LangGraph decision branches, read-only SQL guards, file upload security, authentication/RBAC, multi-turn memory, Ollama serving, resource stability, and audit trail logging.
 - [x] **Defense-in-Depth API Security:**
   - Path traversal protection, file extension whitelisting, upload size limits, and configurable CORS origins.
 - [x] **Centralized Logging & Lifespan Architecture:**

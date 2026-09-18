@@ -1,7 +1,6 @@
 # 🗄️ Enterprise Database Integration (SQLAlchemy)
 
-`OpenLocalRagAgents` features a modular, database-agnostic connector layer (`src/connectors/`) built on **SQLAlchemy**. It enables plug-and-play connectivity to **PostgreSQL, MSSQL, MySQL, Oracle, or SQLite** without coupling to proprietary database vendor APIs.
-
+`OpenLocalEnterpriseRag` features a modular, database-agnostic connector layer (`src/connectors/`) built on **SQLAlchemy**. It enables plug-and-play connectivity to **PostgreSQL, MSSQL, MySQL, Oracle, or SQLite** without coupling to proprietary database vendor APIs.
 
 ---
 
@@ -9,7 +8,7 @@
 
 The system supports two complementary database workflows:
 
-1. **Live Text-to-SQL Tooling:**
+1. **Live Text-to-SQL Agent Tooling:**
    - Designed for numeric, transactional, and dynamic operational data (sales, inventory, orders).
    - The LLM dynamically inspects accessible database schemas and executes safe read-only `SELECT` queries to formulate answers.
 2. **Table-to-Vector ETL Synchronization:**
@@ -63,6 +62,19 @@ To prevent accidental data corruption or malicious command injection, multi-laye
 
 ---
 
+## 🛠️ LangChain Agent Database Tools (`src.agent.tools`)
+
+The platform exposes two native LangChain tools allowing agent workflows to safely interact with relational data:
+
+| Tool | Purpose | Security Guardrails |
+| :--- | :--- | :--- |
+| `sql_db_schema` | Returns accessible database tables and column data types | Filters schemas against `DB_ALLOWED_TABLES` whitelist |
+| `sql_db_query` | Executes safe read-only SQL queries and returns JSON rows | Enforces `SELECT`-only prefix, keyword blacklist, row capping |
+
+Both tools can be dynamically bound to supported ChatModels (`ChatHuggingFace`, `ChatOllama`) via tool calling.
+
+---
+
 ## 🔄 Table Vectorization (ETL Sync)
 
 Synchronize a relational table into ChromaDB using either the Web UI or REST API:
@@ -73,11 +85,18 @@ Synchronize a relational table into ChromaDB using either the Web UI or REST API
 3. Click **"🔄 Vectorize Table"**.
 
 ### Via REST API:
+> [!NOTE]
+> Requires `Authorization: Bearer <token>` with `admin` role.
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/database/sync-table" \
+     -H "Authorization: Bearer <admin_token>" \
      -H "Content-Type: application/json" \
      -d '{
-       "table_name": "destek_talepleri"
+       "table_name": "destek_talepleri",
+       "text_columns": ["konu", "aciklama", "cozum_notu"],
+       "title_column": "konu",
+       "id_column": "id"
      }'
 ```
 

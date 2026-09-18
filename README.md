@@ -1,4 +1,4 @@
-# 🏢 OpenLocalRagAgents
+# 🏢 OpenLocalEnterpriseRag
 
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
@@ -17,6 +17,10 @@
 * 🔒 **100% Local & Air-Gapped:** All embeddings, Cross-Encoder reranking, and LLM inferences execute strictly on your local GPU/CPU. Zero data egress, zero cloud telemetry, and zero token costs.
 * 🎯 **Two-Stage Retrieval:** Combines `BAAI/bge-m3` dense vector search with `BAAI/bge-reranker-v2-m3` Cross-Encoder scoring to extract pinpoint enterprise context within milliseconds.
 * 🛡️ **Self-Correcting Hallucination Guard (Self-RAG):** Evaluates draft answers against retrieved sources. If speculative claims are detected on complex queries, the `refine` node prunes hallucinations and preserves confirmed facts instead of abruptly failing.
+* 🔐 **Enterprise Authentication & RBAC:** Native JWT Bearer token authentication with bcrypt password hashing and three access tiers (`admin`, `editor`, `viewer`) guarding document management, SQL execution, and system settings.
+* 📜 **Tamper-Evident Compliance Audit Trail:** SQLite-backed audit logging (`data/audit.db`) recording all queries, document uploads/deletions, SQL queries, user logins, and errors with IP tracking and execution latency (ms).
+* 🧠 **Multi-Turn Conversational Memory:** Persistent LangGraph SQLite checkpointer (`data/conversations.db`) with user-isolated session threads (`{username}_{session_id}`) and contextual retrieval query enrichment.
+* 🚀 **Dual Serving Backends (HuggingFace & Ollama):** Run in-process with local BF16 models (`Qwen2.5-1.5B`) or seamlessly connect to external high-concurrency Ollama instances (`qwen2.5:7b`, `llama3.1:8b`) with adaptive concurrency gating.
 * 🗄️ **Universal Database Connector:** Connects to **PostgreSQL, MSSQL, MySQL, Oracle, and SQLite** via an SQLAlchemy abstraction layer with strict read-only security guards and automated table vectorization.
 * ⚡ **Thinking Indicator UX:** Streamlined user experience featuring interactive thinking indicators while LangGraph verifies claims, delivering complete, verified responses atomically without character flickering.
 * 🌐 **Language-Agnostic & Multilingual:** Native multilingual search across enterprise corpora powered by BGE-M3 dense vectors, responding naturally in the user's language without artificial constraints.
@@ -30,11 +34,11 @@ Explore our detailed architectural and operational guides:
 
 | Guide | Description |
 | :--- | :--- |
-| 🏗️ [**System Architecture**](docs/architecture.md) | LangGraph workflow engine, two-stage Cross-Encoder reranking, and contextual chunking |
-| 📦 [**Installation & Hardware Matrix**](docs/installation.md) | VRAM/RAM hardware requirements, CUDA 12.1 setup, and offline model provisioning |
+| 🏗️ [**System Architecture**](docs/architecture.md) | LangGraph workflow engine, two-stage Cross-Encoder reranking, RBAC, audit trail, and memory |
+| 📦 [**Installation & Hardware Matrix**](docs/installation.md) | VRAM/RAM hardware requirements, CUDA 12.1 setup, Ollama integration, and offline provisioning |
 | 🗄️ [**Database Connectors**](docs/database_connectors.md) | Universal SQLAlchemy configurations, Text-to-SQL security, and ETL table vectorization |
-| 🔌 [**REST API Reference**](docs/api_reference.md) | FastAPI endpoint documentation, NDJSON event streaming protocols, and cURL examples |
-| 🐳 [**Docker Deployment**](docs/docker_deployment.md) | Production multi-service containerization, NVIDIA GPU passthrough, and volumes |
+| 🔌 [**REST API Reference**](docs/api_reference.md) | FastAPI endpoint documentation, JWT auth, NDJSON event streaming, and cURL examples |
+| 🐳 [**Docker Deployment**](docs/docker_deployment.md) | Production multi-service containerization (Backend, Frontend, Ollama), NVIDIA GPU passthrough |
 | 🗺️ [**Roadmap**](docs/roadmap.md) | Multi-agent supervisor teams, Hybrid search (BM25 + Dense), GraphRAG, and vLLM acceleration |
 
 ---
@@ -43,8 +47,8 @@ Explore our detailed architectural and operational guides:
 
 ### 1. Clone Repository & Install Dependencies
 ```bash
-git clone https://github.com/SirAlper/OpenLocalRagAgents.git
-cd OpenLocalRagAgents
+git clone https://github.com/SirAlper/OpenLocalEnterpriseRag.git
+cd OpenLocalEnterpriseRag
 
 # Create and activate virtual environment
 python -m venv .venv
@@ -74,6 +78,12 @@ streamlit run ui/app.py
 # Web Dashboard: http://localhost:8501
 ```
 
+> [!NOTE]
+> **Default Admin Credentials:**  
+> - **Username:** `admin`  
+> - **Password:** `admin123`  
+> (Can be customized via `ADMIN_DEFAULT_USERNAME` and `ADMIN_DEFAULT_PASSWORD` in `.env`).
+
 ### 4. Or Launch Instantly with Docker 🐳
 Run the backend and UI with persistent local volumes:
 ```bash
@@ -82,11 +92,14 @@ docker compose up -d
 
 # NVIDIA GPU Mode (CUDA Passthrough):
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+
+# With Optional Ollama Serving Profile:
+docker compose --profile ollama up -d
 ```
 See the full [Docker Deployment Guide](docs/docker_deployment.md) for Container Toolkit setup.
 
 ### 5. Run Automated Tests
-Verify all 30 unit and security tests across agent, database, loader, and API guards:
+Verify all 52 unit, integration, and security tests across agent workflows, RBAC, database, loader, and memory guards:
 ```bash
 python -m unittest discover tests -v
 # or using pytest:
@@ -98,24 +111,25 @@ pytest tests/ -v
 ## 📁 Repository Structure
 
 ```text
-OpenLocalRagAgents/
-├── data/                  # Enterprise documents (PDF, DOCX, TXT) and sample SQLite DB
+OpenLocalEnterpriseRag/
+├── data/                  # Documents (PDF, DOCX, TXT), sample DB, audit.db, conversations.db, users.json
 ├── models/                # Local model weights (Qwen2.5-1.5B, BGE-M3, BGE-Reranker)
 ├── vector_db/             # ChromaDB persistent vector collection
-├── tests/                 # Automated unit and security test suite (30 tests)
-
+├── tests/                 # Automated unit, integration, and security test suite (52 tests)
+│
 ├── ui/
-│   └── app.py             # Streamlit enterprise management dashboard & chat UI
+│   └── app.py             # Streamlit enterprise management dashboard, RBAC chat & audit UI
 ├── src/
-│   ├── core/              # System configurations, environment settings, and centralized logger
+│   ├── core/              # System configurations, audit logger, environment settings, and logger
+│   ├── auth/              # Enterprise JWT handler, user store, password hashing, and RBAC dependencies
 │   ├── rag/               # Contextual document loader and Two-Stage ChromaDB/Reranker engine
-│   ├── agent/             # LangGraph state workflow, LLM loader, prompts, and tools
+│   ├── agent/             # LangGraph state workflow, LLM loader (HF & Ollama), memory, prompts, tools
 │   ├── connectors/        # SQLAlchemy universal database connector and table vectorizer
 │   ├── api/               # Modular FastAPI REST API gateway (routes/, schemas, state)
 │   └── main.py            # Backward-compatible launch entrypoint (uvicorn src.main:app)
-├── docs/                  # [Comprehensive Technical Guides](docs/)
+├── docs/                  # Comprehensive Technical Guides (docs/)
 ├── Dockerfile             # Production multi-stage Docker container specification
-├── docker-compose.yml     # Multi-service compose definition (Backend + Frontend)
+├── docker-compose.yml     # Multi-service compose definition (Backend + Frontend + Ollama)
 ├── docker-compose.gpu.yml # NVIDIA GPU passthrough override
 ├── download_model.py      # Script to download HuggingFace model weights to local storage
 ├── requirements.txt       # Python package dependencies
