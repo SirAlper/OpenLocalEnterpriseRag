@@ -1,4 +1,4 @@
-# 🏢 OpenLocalEnterpriseRag
+# 🏢 OpenLocalRagAgents
 
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
