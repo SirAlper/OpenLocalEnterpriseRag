@@ -1,22 +1,22 @@
 # 📦 Installation & Hardware Guide
 
-This guide provides step-by-step instructions for deploying `OpenLocalRagAgents` on local workstations or enterprise on-premise servers with hardware acceleration.
+This guide provides step-by-step instructions for deploying `OpenLocalEnterpriseRag` on local workstations or enterprise on-premise servers with hardware acceleration.
 
 ---
 
 ## 💻 System & Hardware Requirements
 
-The system is engineered to run the multilingual embedding model, Cross-Encoder reranker, and Qwen2.5-1.5B concurrently with optimal memory allocation:
+The platform is engineered to support both lightweight in-process execution (HuggingFace) and external inference acceleration (Ollama):
 
-| Component | Minimum Requirements | Recommended Enterprise Setup |
+| Component | Minimum Requirements (HF 1.5B) | Recommended Enterprise (Ollama 7B/14B) |
 | :--- | :--- | :--- |
 | **Operating System** | Ubuntu 22.04 LTS / Windows 11 | Ubuntu 22.04 LTS / Windows 11 / RHEL 9 |
 | **Python** | 3.10+ | 3.11 or 3.12 |
-| **System RAM** | 8 GB DDR4 | 16 GB+ RAM |
-| **GPU / VRAM** | NVIDIA GPU (**Min 4-6 GB VRAM**) | NVIDIA RTX 3060 / 4060 / A4000+ (8+ GB VRAM) |
+| **System RAM** | 8 GB DDR4 | 16 GB - 32 GB DDR5 |
+| **GPU / VRAM** | NVIDIA GPU (**Min 4-6 GB VRAM**) | NVIDIA RTX 3060 / 4060 / A4000+ (8-16 GB VRAM) |
 | **CUDA Version** | CUDA 11.8+ | CUDA 12.1+ |
 
-> **Memory Allocation Architecture:**  
+> **Memory Allocation Architecture (Default HuggingFace Backend):**  
 > - `bge-m3` Embedding Model: ~1.1 GB (Runs on CPU to preserve GPU memory)  
 > - `bge-reranker-v2-m3` Reranker Model: ~1.1 GB (Runs on CPU)  
 > - `Qwen2.5-1.5B-Instruct` LLM: ~2.8 GB (Loaded directly into GPU VRAM in BF16 format)  
@@ -28,10 +28,9 @@ The system is engineered to run the multilingual embedding model, Cross-Encoder 
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/SirAlper/OpenLocalRagAgents.git
-cd OpenLocalRagAgents
+git clone https://github.com/SirAlper/OpenLocalEnterpriseRag.git
+cd OpenLocalEnterpriseRag
 ```
-
 
 ### 2. Create and Activate Virtual Environment
 ```bash
@@ -76,21 +75,35 @@ pip install -r requirements.txt
 Create a `.env` file in the root directory (loaded automatically via `python-dotenv`):
 
 ```env
-# --- Database Configuration (Optional) ---
+# ─── Authentication & RBAC ───
+ADMIN_DEFAULT_USERNAME=admin
+ADMIN_DEFAULT_PASSWORD=admin123
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+# Optional custom HMAC secret (randomly generated and persisted to data/.jwt_secret if unset):
+# JWT_SECRET_KEY=
+
+# ─── LLM Serving Backend ───
+# "huggingface" (in-process BF16) or "ollama" (external server)
+LLM_BACKEND=huggingface
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:7b
+OLLAMA_NUM_PARALLEL=4
+
+# ─── Relational Database (Optional) ───
 # Supports PostgreSQL, MSSQL, MySQL, Oracle, SQLite
 DATABASE_URL=sqlite:///./data/sample_enterprise.db
 DB_ALLOWED_TABLES=urunler,satislar,destek_talepleri
 DB_MAX_ROWS=50
 
-# --- API & Security Settings ---
+# ─── API & Security Settings ───
 CORS_ORIGINS=http://localhost:8501,http://127.0.0.1:8501
 MAX_UPLOAD_SIZE_MB=50
 
-# --- Logging Settings ---
+# ─── Logging Settings ───
 LOG_LEVEL=INFO
 LOG_FILE=app.log
 
-# --- Model & Hardware Execution ---
+# ─── Model & Hardware Execution ───
 RAG_DEVICE=cpu
 ALLOW_ONLINE_HF=0
 ```
@@ -118,7 +131,7 @@ Once downloaded, the system operates in **100% offline (air-gapped)** mode with 
 
 ## 🧪 Running Automated Tests
 
-Run the full automated test suite (32 unit & security tests):
+Run the full automated test suite (**52 unit, integration & security tests**):
 
 ```bash
 # Using Python's built-in test runner:
@@ -144,3 +157,8 @@ In a separate terminal window:
 streamlit run ui/app.py
 ```
 * **Web UI:** `http://localhost:8501`
+
+> [!NOTE]
+> **Initial Sign-In Credentials:**  
+> - **Username:** `admin`  
+> - **Password:** `admin123`
