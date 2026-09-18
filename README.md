@@ -47,8 +47,8 @@ Explore our detailed architectural and operational guides:
 
 ### 1. Clone Repository & Install Dependencies
 ```bash
-git clone https://github.com/SirAlper/OpenLocalEnterpriseRag.git
-cd OpenLocalEnterpriseRag
+git clone https://github.com/SirAlper/OpenLocalRagAgents.git
+cd OpenLocalRagAgents
 
 # Create and activate virtual environment
 python -m venv .venv
@@ -111,7 +111,7 @@ pytest tests/ -v
 ## 📁 Repository Structure
 
 ```text
-OpenLocalEnterpriseRag/
+OpenLocalRagAgents/
 ├── data/                  # Documents (PDF, DOCX, TXT), sample DB, audit.db, conversations.db, users.json
 ├── models/                # Local model weights (Qwen2.5-1.5B, BGE-M3, BGE-Reranker)
 ├── vector_db/             # ChromaDB persistent vector collection

@@ -1,6 +1,6 @@
 # 📦 Installation & Hardware Guide
 
-This guide provides step-by-step instructions for deploying `OpenLocalEnterpriseRag` on local workstations or enterprise on-premise servers with hardware acceleration.
+This guide provides step-by-step instructions for deploying `OpenLocalRagAgents` on local workstations or enterprise on-premise servers with hardware acceleration.
 
 ---
 
@@ -28,8 +28,8 @@ The platform is engineered to support both lightweight in-process execution (Hug
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/SirAlper/OpenLocalEnterpriseRag.git
-cd OpenLocalEnterpriseRag
+git clone https://github.com/SirAlper/OpenLocalRagAgents.git
+cd OpenLocalRagAgents
 ```
 
 ### 2. Create and Activate Virtual Environment
